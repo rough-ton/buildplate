@@ -1,0 +1,174 @@
+// 3D viewer: printer build plate sized from the printer profile, STL part, orbit controls.
+import * as THREE from "three";
+import { STLLoader } from "/vendor/three/STLLoader.js";
+import { OrbitControls } from "/vendor/three/OrbitControls.js";
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+export class Viewer {
+  constructor(el) {
+    this.el = el;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    el.appendChild(this.renderer.domElement);
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(40, 1, 0.5, 20000);
+    this.camera.up.set(0, 0, 1);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.12;
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.6));
+    const key = new THREE.DirectionalLight(0xffffff, 1.4);
+    key.position.set(1, -1.4, 2);
+    this.scene.add(key);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.5);
+    rim.position.set(-1.5, 1.2, 0.6);
+    this.scene.add(rim);
+    this.bed = { x: 256, y: 256 };
+    this.plate = null;
+    this.mesh = null;
+    this.edges = null;
+    this.wire = false;
+    this.loader = new STLLoader();
+    this._ro = new ResizeObserver(() => this.resize());
+    this._ro.observe(el);
+    this._mq = window.matchMedia("(prefers-color-scheme: dark)");
+    this._onScheme = () => { this.buildPlate(); this.recolor(); };
+    this._mq.addEventListener("change", this._onScheme);
+    this.buildPlate();
+    this.resize();
+    this.home("iso");
+    const tick = () => {
+      this._raf = requestAnimationFrame(tick);
+      this.controls.update();
+      this.renderer.render(this.scene, this.camera);
+    };
+    tick();
+  }
+
+  setBed(x, y) {
+    if (x === this.bed.x && y === this.bed.y) return;
+    this.bed = { x, y };
+    this.buildPlate();
+  }
+
+  buildPlate() {
+    if (this.plate) { this.scene.remove(this.plate); this.plate.traverse((o) => o.geometry && o.geometry.dispose()); }
+    const g = new THREE.Group();
+    const { x, y } = this.bed;
+    const major = new THREE.Color(css("--grid-major") || "#B7C1CB");
+    const minor = new THREE.Color(css("--grid-minor") || "#CDD5DD");
+    const surface = new THREE.Mesh(
+      new THREE.PlaneGeometry(x, y),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(css("--viewer-bg") || "#E4E9EE").offsetHSL(0, 0, 0.025), transparent: true, opacity: 0.9 })
+    );
+    surface.position.z = -0.05;
+    g.add(surface);
+    const pts = { major: [], minor: [] };
+    for (let i = -Math.floor(x / 2 / 10) * 10; i <= x / 2; i += 10) {
+      (i % 50 === 0 ? pts.major : pts.minor).push(i, -y / 2, 0, i, y / 2, 0);
+    }
+    for (let j = -Math.floor(y / 2 / 10) * 10; j <= y / 2; j += 10) {
+      (j % 50 === 0 ? pts.major : pts.minor).push(-x / 2, j, 0, x / 2, j, 0);
+    }
+    for (const [k, color] of [["minor", minor], ["major", major]]) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(pts[k], 3));
+      g.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color })));
+    }
+    const border = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-x / 2, -y / 2, 0), new THREE.Vector3(x / 2, -y / 2, 0),
+      new THREE.Vector3(x / 2, y / 2, 0), new THREE.Vector3(-x / 2, y / 2, 0), new THREE.Vector3(-x / 2, -y / 2, 0),
+    ]);
+    g.add(new THREE.Line(border, new THREE.LineBasicMaterial({ color: major })));
+    const axis = (to, color) => {
+      const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0.02), to]);
+      g.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color })));
+    };
+    axis(new THREE.Vector3(20, 0, 0.02), 0xd0453a);
+    axis(new THREE.Vector3(0, 20, 0.02), 0x3a9d4f);
+    this.plate = g;
+    this.scene.add(g);
+  }
+
+  recolor() {
+    if (this.mesh) this.mesh.material.color = new THREE.Color(css("--part") || "#3C6E9E");
+  }
+
+  async load(url) {
+    const geo = await this.loader.loadAsync(url);
+    geo.computeVertexNormals();
+    geo.computeBoundingBox();
+    if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); }
+    if (this.edges) { this.scene.remove(this.edges); this.edges.geometry.dispose(); this.edges = null; }
+    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(css("--part") || "#3C6E9E"), roughness: 0.55, metalness: 0.05, flatShading: false, wireframe: this.wire });
+    this.mesh = new THREE.Mesh(geo, mat);
+    this.scene.add(this.mesh);
+    const first = !this._hasLoaded;
+    this._hasLoaded = true;
+    if (first) {
+      if (this.el.clientWidth > 0) this.home(this._view || "iso");
+      else this._needsHome = true;
+    }
+    return geo.boundingBox;
+  }
+
+  clear() {
+    if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh = null; }
+    this._hasLoaded = false;
+  }
+
+  toggleWire() {
+    this.wire = !this.wire;
+    if (this.mesh) this.mesh.material.wireframe = this.wire;
+    return this.wire;
+  }
+
+  home(view = "iso") {
+    this._view = view;
+    let center = new THREE.Vector3(0, 0, 0);
+    let radius = Math.max(this.bed.x, this.bed.y) * 0.35;
+    if (this.mesh) {
+      const box = this.mesh.geometry.boundingBox;
+      center = box.getCenter(new THREE.Vector3());
+      radius = Math.max(box.getSize(new THREE.Vector3()).length() * 0.5, 5);
+    }
+    const vfov = (this.camera.fov * Math.PI) / 180;
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * this.camera.aspect);
+    const dist = (radius / Math.sin(Math.min(vfov, hfov) / 2)) * 1.12;
+    const dirs = {
+      iso: new THREE.Vector3(0.62, -0.95, 0.72),
+      front: new THREE.Vector3(0, -1, 0.0001),
+      right: new THREE.Vector3(1, 0, 0.0001),
+      top: new THREE.Vector3(0, -0.0001, 1),
+    };
+    const d = (dirs[view] || dirs.iso).clone().normalize();
+    this.camera.position.copy(center).add(d.multiplyScalar(dist));
+    this.controls.target.copy(center);
+    this.camera.near = dist / 100;
+    this.camera.far = dist * 100;
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+  }
+
+  resize() {
+    const w = this.el.clientWidth || 1;
+    const h = this.el.clientHeight || 1;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    if (this._needsHome && this.el.clientWidth > 0) {
+      this._needsHome = false;
+      this.home(this._view || "iso");
+    }
+  }
+
+  dispose() {
+    cancelAnimationFrame(this._raf);
+    this._ro.disconnect();
+    this._mq.removeEventListener("change", this._onScheme);
+    this.controls.dispose();
+    this.renderer.dispose();
+    this.renderer.domElement.remove();
+  }
+}

@@ -1,0 +1,81 @@
+name: Build and publish
+
+# Tests every push and pull request, and publishes the container image to
+# GitHub Container Registry:
+#   push to main  -> :edge and :sha-<short>
+#   tag vX.Y.Z    -> :X.Y.Z, :X.Y and :latest
+# Uses GitHub-hosted runners, which are free and unlimited for public repositories.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/buildplate
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install OpenSCAD and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openscad xvfb xauth
+          pip install -r requirements.txt pytest
+      - name: Run tests
+        run: pytest -q
+
+  image:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=edge,branch=main
+            type=sha,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || format('edge-{0}', github.sha) }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test the published image
+        run: |
+          docker run -d --name smoke -p 8080:8080 ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/api/health && exit 0; sleep 2; done
+          docker logs smoke; exit 1
