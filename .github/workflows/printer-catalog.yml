@@ -11,9 +11,9 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Fetch OrcaSlicer profiles
         run: |
           git clone --depth 1 --filter=blob:none --sparse https://github.com/SoftFever/OrcaSlicer /tmp/orca
