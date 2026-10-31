@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Buildplate</Name>
+  <Repository>ghcr.io/rough-ton/buildplate:latest</Repository>
+  <Registry>https://github.com/rough-ton/buildplate/pkgs/container/buildplate</Registry>
+  <Network>bridge</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/rough-ton/buildplate/issues</Support>
+  <Project>https://github.com/rough-ton/buildplate</Project>
+  <Overview>Self-hosted AI design studio for 3D printing. Describe a part in plain words and Buildplate writes parametric OpenSCAD, renders and validates it against your printer, and gives you STL or 3MF. Works with Claude, OpenAI, Gemini, OpenRouter, Ollama and any OpenAI-compatible server. Includes a web UI, per-request token and cost tracking, and an MCP endpoint for Claude Desktop and Claude Code. All settings, including API keys, are managed in the web UI with no restart.</Overview>
+  <Category>Productivity: Tools: AI:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/rough-ton/buildplate/main/deploy/unraid/buildplate.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/rough-ton/buildplate/main/assets/icon.png</Icon>
+  <ExtraParams>--add-host=host.docker.internal:host-gateway</ExtraParams>
+  <Config Name="Web UI port" Target="8080" Default="8080" Mode="tcp" Description="Port for the web UI, REST API and MCP endpoint (/mcp)." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="App data" Target="/data" Default="/mnt/user/appdata/buildplate" Mode="rw" Description="Settings, encrypted API keys, design library, usage history and render cache. Put extra OpenSCAD libraries in the libraries subfolder." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/buildplate</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Description="User ID that owns the app data folder." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Description="Group ID that owns the app data folder." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="Time zone" Target="TZ" Default="America/Denver" Description="Used for daily usage charts." Type="Variable" Display="advanced" Required="false" Mask="false">America/Denver</Config>
+  <Config Name="Initial admin password" Target="BUILDPLATE_ADMIN_PASSWORD" Default="" Description="Optional. Sets the web UI password on first start. You can set or change it later in Settings." Type="Variable" Display="always" Required="false" Mask="true"/>
+</Container>

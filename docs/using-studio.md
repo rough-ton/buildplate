@@ -1,0 +1,93 @@
+# Using Studio
+
+Studio has three parts: the conversation on the left, the build plate in the middle, and the inspector on the right.
+
+## Writing a good request
+
+The agent works best with the same information you would give a person designing the part:
+
+- **Sizes that matter**, in millimetres: the diameter it has to fit, the screw size, the thickness you want.
+- **How it is used**: "holds a 300 g spool", "mounts under a desk", "press fit into a 12 mm hole".
+- **What to leave flexible**: "make the length a parameter".
+
+Starting points:
+
+> A cable comb for eight 6 mm cables, 3 mm thick, with two 4 mm mounting holes.
+
+> A drawer divider insert 120 x 80 x 40 mm with three equal compartments and 1.6 mm walls.
+
+Press **Enter** to send. Use **Shift+Enter** for a new line.
+
+## What happens during a request
+
+You see each step as it runs:
+
+1. The model writes the full OpenSCAD source.
+2. Buildplate renders it and checks the mesh: it must render, be watertight, sit on the bed at Z=0, and fit your build volume.
+3. If the model supports vision, it also sees a four-view preview.
+4. The model fixes anything wrong and checks again, up to the step limit in Settings.
+5. The final design is saved as a new version and placed on the plate.
+
+Select **Stop** at any time to cancel. Tokens already used are still recorded.
+
+Under each answer you see the tokens and cost for that request. The total for your current session appears below the prompt.
+
+## Changing a design
+
+Keep typing in the same conversation to refine it: "make it 10 mm taller", "add a lip around the top", "the holes should be 5 mm". The agent receives the current code and edits it rather than starting over.
+
+Select **New** to start a fresh design.
+
+## Parameters
+
+Variables declared at the top of the code in OpenSCAD Customizer format appear in the **Parameters** tab:
+
+```openscad
+/* [Size] */
+// Inside width
+width = 60; // [20:1:200]
+// Lid style
+style = "snap"; // [snap:Snap fit, slide:Sliding]
+```
+
+Dragging a slider re-renders the part on the server. This uses no AI and no tokens.
+
+- **Reset** returns every parameter to the value in the code.
+- **Apply to code** writes the current values into the code as the new defaults. Save a version to keep them.
+
+Exports use the parameter values you have set.
+
+## Editing code
+
+The **Code** tab is a full editor.
+
+- **Render** (Ctrl+Enter or Cmd+Enter) renders your edits without saving.
+- **Save version** (Ctrl+S or Cmd+S) validates and saves them as a new version.
+
+If you send a chat request while you have unsaved edits, the agent starts from your edited code.
+
+Libraries in the container can be included directly, for example `include <BOSL2/std.scad>`. To add your own, copy them into the `libraries` folder inside your data folder; they are picked up on the next render.
+
+## Checks
+
+The **Checks** tab shows the size, volume, an estimated PLA weight, whether the mesh is watertight, the number of separate bodies, and any problems found. When the agent used image previews, the last preview it saw is shown here too.
+
+## History
+
+Every generation and every saved edit is a version. Open one from the **History** tab to load its code and model. Saving after that creates a new version; nothing is overwritten.
+
+## Viewer controls
+
+- Drag to orbit, right-drag or Shift+drag to pan, scroll to zoom.
+- **Iso**, **Front**, **Right** and **Top** frame the part from that side.
+- **Wireframe** shows the mesh triangles.
+
+The grid matches your printer profile, with fine lines every 10 mm and bold lines every 50 mm. The red and green lines mark the X and Y axes at the origin.
+
+## Exporting
+
+The buttons at the bottom of the inspector download:
+
+- **STL** for any slicer.
+- **3MF** for slicers that prefer it, such as Bambu Studio, OrcaSlicer and PrusaSlicer.
+- **SCAD** to keep editing in OpenSCAD itself.
