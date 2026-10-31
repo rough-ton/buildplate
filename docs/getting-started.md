@@ -46,9 +46,9 @@ If the address is reachable by anyone else on your network, set a password first
 
 You do not need to restart anything. See [AI providers](./providers.md) for model recommendations.
 
-## 4. Set your printer
+## 4. Add your printers
 
-Under **Settings > Printer profile**, enter your bed size, nozzle diameter and the clearance you use for parts that fit together. The agent designs to these numbers, and the viewer draws your build plate at the right size.
+Under **Settings > Printers**, pick your printer from **Start from** and select **Add printer**, or edit the default profile. Adjust the nozzle diameter and the clearance you use for parts that fit together. Add a profile for each printer you own; the menu above the viewer in Studio switches between them. The agent designs to the active printer, and the viewer draws its build plate.
 
 ## 5. Make something
 

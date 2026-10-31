@@ -206,8 +206,17 @@ async function Studio(root, [designId]) {
   const viewSeg = h("div", { class: "seg", role: "group", "aria-label": "Camera" },
     ...["iso", "front", "right", "top"].map((v) => h("button", { "data-view": v, class: v === "iso" ? "on" : "" }, v[0].toUpperCase() + v.slice(1))));
   const wireBtn = h("button", { class: "btn btn-sm" }, "Wireframe");
+  const printerSel = h("select", { class: "printer-select", "aria-label": "Target printer" });
+  function fillPrinters() {
+    const st = app.settings;
+    printerSel.innerHTML = "";
+    for (const pr of st.printers) printerSel.append(h("option", { value: pr.id, selected: pr.id === st.active_printer }, pr.name));
+    printerSel.title = `Target printer: ${st.printer.name}, ${+st.printer.bed_x} x ${+st.printer.bed_y} x ${+st.printer.bed_z} mm`;
+    printerSel.append(h("option", { value: "__manage" }, "Manage printers..."));
+  }
+  fillPrinters();
   const stage = h("section", { class: "stage", "data-m": "stage" },
-    h("div", { class: "stage-bar" }, viewSeg, wireBtn, h("span", { class: "spacer" }), h("span", { class: "pill", id: "bed-pill" })),
+    h("div", { class: "stage-bar" }, viewSeg, wireBtn, h("span", { class: "spacer" }), printerSel),
     viewEl, emptyEl, readout, busy);
 
   // ---- right: inspector
@@ -231,7 +240,22 @@ async function Studio(root, [designId]) {
 
   const viewer = new Viewer(viewEl);
   viewer.setBed(settings.printer.bed_x, settings.printer.bed_y);
-  $("#bed-pill").textContent = `${settings.printer.name}: ${settings.printer.bed_x} x ${settings.printer.bed_y} mm`;
+  printerSel.addEventListener("change", async () => {
+    if (printerSel.value === "__manage") {
+      sessionStorage.setItem("bp-jump", "printer");
+      location.hash = "#/settings";
+      return;
+    }
+    try {
+      await api("/api/printers/active", { method: "POST", json: { id: printerSel.value } });
+      await loadSettings();
+      const pr = app.settings.printer;
+      viewer.setBed(pr.bed_x, pr.bed_y);
+      fillPrinters();
+      toast(`Designing for ${pr.name}`);
+      if (s.code.trim()) renderModel();
+    } catch (err) { toast(err.message, "bad"); fillPrinters(); }
+  });
 
   viewSeg.addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -373,6 +397,7 @@ async function Studio(root, [designId]) {
       ? h("div", {}, ...issues.map((i) => h("div", { class: "issue", style: "margin-bottom:6px" }, i)))
       : h("div", { class: "issue ok" }, "Ready to print: watertight, on the bed and inside the build volume."));
     wrap.append(h("dl", { class: "stat-list" },
+      h("dt", {}, "Checked for"), h("dd", {}, st.printer || app.settings.printer.name),
       h("dt", {}, "Size"), h("dd", {}, `${st.size_mm.join(" x ")} mm`),
       h("dt", {}, "Volume"), h("dd", {}, st.volume_mm3 != null ? `${fmtInt(Math.round(st.volume_mm3))} mm³` : "n/a"),
       h("dt", {}, "PLA estimate"), h("dd", {}, st.est_filament_g_pla != null ? `${st.est_filament_g_pla} g` : "n/a"),
@@ -390,7 +415,7 @@ async function Studio(root, [designId]) {
     const list = h("div", { class: "versions" });
     for (const v of [...s.versions].reverse()) {
       list.append(h("button", { class: `version ${v.version === s.version ? "on" : ""}`, onclick: () => openVersion(v.version) },
-        h("span", { class: "v" }, `v${v.version}`), h("span", { class: "s", title: v.summary }, v.summary || "No summary"), h("span", { class: "spacer" }), h("span", { class: "hint", style: "margin:0;white-space:nowrap" }, ago(v.created_at))));
+        h("span", { class: "v" }, `v${v.version}`), h("span", { class: "s", title: v.summary }, v.summary || "No summary", v.stats?.printer ? h("span", { class: "hint", style: "display:block;margin:0" }, v.stats.printer) : null), h("span", { class: "spacer" }), h("span", { class: "hint", style: "margin:0;white-space:nowrap" }, ago(v.created_at))));
     }
     wrap.append(list);
     tabBody.append(wrap);
@@ -842,7 +867,7 @@ async function Settings(root) {
 
   page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Settings"), h("p", {}, "Changes apply immediately. Nothing needs a restart or rebuild."))));
   const toc = h("nav", { class: "toc", "aria-label": "Settings sections" },
-    ...[["providers", "AI providers"], ["agent", "Design agent"], ["printer", "Printer"], ["render", "Rendering"], ["access", "Access and MCP"], ["pricing", "Pricing"], ["system", "System"]].map(([id, l]) => h("a", { href: `#/settings`, onclick: (e) => { e.preventDefault(); $(`#sec-${id}`).scrollIntoView({ behavior: "smooth", block: "start" }); } }, l)));
+    ...[["providers", "AI providers"], ["agent", "Design agent"], ["printer", "Printers"], ["render", "Rendering"], ["access", "Access and MCP"], ["pricing", "Pricing"], ["system", "System"]].map(([id, l]) => h("a", { href: `#/settings`, onclick: (e) => { e.preventDefault(); $(`#sec-${id}`).scrollIntoView({ behavior: "smooth", block: "start" }); } }, l)));
   const body = h("div", {});
   page.append(h("div", { class: "settings-layout" }, toc, body));
   root.append(page);
@@ -985,21 +1010,86 @@ async function Settings(root) {
         h("div", {}, h("button", { class: "btn", onclick: () => { if (!m.value.includes("/")) return toast("Use the form provider/model", "bad"); ov[m.value.trim()] = { input: Number(i.value || 0), output: Number(o.value || 0) }; markDirty(); renderPricing(); } }, "Add price"))));
   }
 
+  // ---- printers
+  const presets = (await api("/api/printers/presets")).presets;
+  const printerWrap = h("div", {});
+  let editId = draft.active_printer;
+  function renderPrinters() {
+    printerWrap.innerHTML = "";
+    const list = h("div", { class: "printer-list", role: "list" });
+    for (const pr of draft.printers) {
+      const active = pr.id === draft.active_printer;
+      list.append(h("button", { class: `pcard ${pr.id === editId ? "on" : ""}`, role: "listitem", onclick: () => { editId = pr.id; renderPrinters(); } },
+        h("span", { class: "pcard-name" }, pr.name, active ? h("span", { class: "pill accent", style: "margin-left:8px" }, "Active") : null),
+        h("span", { class: "pcard-dims tabular" }, `${+pr.bed_x} x ${+pr.bed_y} x ${+pr.bed_z} mm, ${+pr.nozzle} mm nozzle`)));
+    }
+    const pr = draft.printers.find((x) => x.id === editId) || draft.printers[0];
+    editId = pr.id;
+    const pf = (label, key, type = "number", attrs = {}, hint) => {
+      const id = `pr-${key}`;
+      const el = h("input", { id, type, value: pr[key], ...attrs });
+      el.addEventListener("input", () => {
+        pr[key] = type === "number" ? Number(el.value) : el.value;
+        markDirty();
+        if (key === "name" || key.startsWith("bed_") || key === "nozzle") {
+          const card = $(".pcard.on", list);
+          if (card) { $(".pcard-name", card).firstChild.textContent = pr.name; $(".pcard-dims", card).textContent = `${+pr.bed_x} x ${+pr.bed_y} x ${+pr.bed_z} mm, ${+pr.nozzle} mm nozzle`; }
+        }
+      });
+      return field(label, el, hint);
+    };
+    const presetSel = h("select", { "aria-label": "Start from" },
+      h("option", { value: "" }, "Blank profile"),
+      ...Object.entries(presets.reduce((g, p) => ((g[p.brand] ||= []).push(p), g), {})).map(([brand, items]) =>
+        h("optgroup", { label: brand }, items.map((p) => h("option", { value: p.key }, p.name)))));
+    const addBtn = h("button", { class: "btn", html: icons.plus + "Add printer" });
+    addBtn.addEventListener("click", () => {
+      const base = presets.find((p) => p.key === presetSel.value);
+      const id = `p${Date.now().toString(36)}`;
+      const np = base
+        ? { id, preset: base.key, name: base.name, bed_x: base.bed_x, bed_y: base.bed_y, bed_z: base.bed_z, nozzle: base.nozzle, layer_height: base.layer_height, clearance: base.clearance, max_overhang: base.max_overhang }
+        : { id, name: "New printer", bed_x: 220, bed_y: 220, bed_z: 250, nozzle: 0.4, layer_height: 0.2, clearance: 0.25, max_overhang: 45 };
+      draft.printers.push(np);
+      editId = id;
+      markDirty();
+      renderPrinters();
+      $("#pr-name")?.focus();
+    });
+    const isActive = pr.id === draft.active_printer;
+    printerWrap.append(
+      list,
+      h("div", { class: "printer-editor" },
+        h("div", { class: "row", style: "margin-bottom:12px" },
+          h("h3", { class: "h3", style: "margin:0" }, `Editing ${pr.name}`),
+          h("span", { class: "spacer" }),
+          isActive ? h("span", { class: "hint", style: "margin:0" }, "This is the active printer") : h("button", { class: "btn btn-sm", onclick: () => { draft.active_printer = pr.id; markDirty(); renderPrinters(); } }, "Make active"),
+          h("button", { class: "btn btn-sm btn-ghost", onclick: () => { const id = `p${Date.now().toString(36)}`; draft.printers.push({ ...structuredClone(pr), id, name: `${pr.name} copy` }); editId = id; markDirty(); renderPrinters(); } }, "Duplicate"),
+          draft.printers.length > 1 ? h("button", { class: "btn btn-sm btn-ghost btn-danger", onclick: () => {
+            if (!confirm(`Remove the ${pr.name} profile?`)) return;
+            draft.printers = draft.printers.filter((x) => x.id !== pr.id);
+            if (draft.active_printer === pr.id) draft.active_printer = draft.printers[0].id;
+            editId = draft.active_printer;
+            markDirty(); renderPrinters();
+          } }, "Remove") : null),
+        h("div", { class: "grid-4" },
+          pf("Name", "name", "text"),
+          pf("Bed X (mm)", "bed_x", "number", { min: 20 }),
+          pf("Bed Y (mm)", "bed_y", "number", { min: 20 }),
+          pf("Max height (mm)", "bed_z", "number", { min: 20 })),
+        h("div", { class: "grid-4", style: "margin-top:16px" },
+          pf("Nozzle (mm)", "nozzle", "number", { step: 0.05 }),
+          pf("Layer height (mm)", "layer_height", "number", { step: 0.02 }),
+          pf("Fit clearance (mm)", "clearance", "number", { step: 0.05 }, "Gap for parts that mate"),
+          pf("Max overhang (deg)", "max_overhang", "number")),
+        pr.preset ? h("p", { class: "hint" }, "Started from a preset. Build volumes are the manufacturer's published figures; check them against your machine.") : null),
+      h("div", { class: "row printer-add" }, h("label", { style: "margin:0" }, "Start from"), presetSel, addBtn));
+  }
+
   const p = sys.openscad;
   body.append(
     section("providers", "AI providers", "Connect one or more providers. Keys are encrypted on disk and never sent back to the browser.", provWrap),
     section("agent", "Design agent", "How the AI works on a request.", agentWrap),
-    section("printer", "Printer profile", "The agent designs to these limits, and the viewer draws your build plate at this size.",
-      h("div", { class: "grid-4" },
-        field("Printer name", bind("printer.name")),
-        field("Bed X (mm)", bind("printer.bed_x", "number")),
-        field("Bed Y (mm)", bind("printer.bed_y", "number")),
-        field("Max height (mm)", bind("printer.bed_z", "number"))),
-      h("div", { class: "grid-4", style: "margin-top:16px" },
-        field("Nozzle (mm)", bind("printer.nozzle", "number", { step: 0.05 })),
-        field("Layer height (mm)", bind("printer.layer_height", "number", { step: 0.02 })),
-        field("Fit clearance (mm)", bind("printer.clearance", "number", { step: 0.05 }), "Gap for parts that mate"),
-        field("Max overhang (deg)", bind("printer.max_overhang", "number")))),
+    section("printer", "Printers", "Save a profile for each printer you own. The agent designs to the active printer's limits, and the viewer draws its build plate. Switch printers here or from the menu above the viewer in Studio.", printerWrap),
     section("render", "Rendering", null,
       h("div", { class: "grid-4" },
         field("Geometry engine", bind("render.backend", "select", { options: [["auto", "Automatic"], ["manifold", "Manifold (fast)"], ["cgal", "CGAL (classic)"]] }), p.manifold ? "Manifold is available" : "This OpenSCAD build only has CGAL"),
@@ -1022,12 +1112,16 @@ async function Settings(root) {
         h("a", { class: "btn btn-ghost", href: "/api/docs", target: "_blank" }, "REST API reference"))),
     h("div", { class: "save-bar" }, saveState, saveBtn));
 
-  renderProviders(); renderAgent(); renderAccess(); renderPricing();
+  renderProviders(); renderAgent(); renderAccess(); renderPricing(); renderPrinters();
+  if (location.hash.endsWith("#printers") || sessionStorage.getItem("bp-jump") === "printer") {
+    sessionStorage.removeItem("bp-jump");
+    requestAnimationFrame(() => $("#sec-printer")?.scrollIntoView({ block: "start" }));
+  }
 
   saveBtn.addEventListener("click", async () => {
     saveBtn.disabled = true;
     try {
-      const { providers, security, ...rest } = draft;
+      const { providers, security, printer, ...rest } = draft;
       rest.security = { session_hours: draft.security.session_hours };
       await api("/api/settings", { method: "PATCH", json: rest });
       // Overrides are replaced as a whole so removals stick.
@@ -1036,7 +1130,8 @@ async function Settings(root) {
       saveState.textContent = "Saved. Changes are live.";
       toast("Settings saved");
       Object.assign(draft, structuredClone(app.settings));
-      renderProviders(); renderAgent(); renderAccess();
+      editId = draft.printers.some((x) => x.id === editId) ? editId : draft.active_printer;
+      renderProviders(); renderAgent(); renderAccess(); renderPrinters();
     } catch (err) {
       saveBtn.disabled = false;
       toast(err.message, "bad");

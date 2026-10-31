@@ -21,6 +21,7 @@ Buildplate runs as a single Docker container. Point it at the AI provider you al
 - **Bring any model.** Claude, OpenAI, Gemini, OpenRouter, Ollama, LM Studio, vLLM and other OpenAI-compatible servers. Switch models per request.
 - **Configure everything in the browser.** Add API keys, connect providers, pick models, change your printer profile and limits. Changes are live immediately; nothing restarts or rebuilds.
 - **A design loop that checks its own work.** The agent renders every draft, validates it (watertight, on the bed, inside your build volume) and, with vision-capable models, reviews a four-view preview before saving.
+- **All your printers.** Save a profile per printer, start from presets for popular models, and switch the target printer from Studio. The plate, checks and design limits follow.
 - **Live parameters.** Customizer variables become sliders. Drag one and the part re-renders in seconds without spending a single token.
 - **Token and cost tracking.** Each request shows input, output and cached tokens plus cost, with a per-step breakdown, daily charts, per-model totals and CSV export.
 - **Library with version history.** Every generation and manual edit is a version you can reopen, compare and export.

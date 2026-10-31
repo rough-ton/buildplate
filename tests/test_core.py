@@ -37,7 +37,7 @@ def test_settings_apply_without_restart(sf):
     store.update({"printer": {"bed_x": 180}})
     assert store.get()["printer"]["bed_x"] == 180.0
     data = json.loads(sf["config"].SETTINGS_FILE.read_text())
-    data["printer"]["bed_x"] = 300
+    data["printers"][0]["bed_x"] = 300
     sf["config"].SETTINGS_FILE.write_text(json.dumps(data))
     import os, time
 
@@ -93,3 +93,43 @@ def test_usage_accounting(sf):
     assert run["input_tokens"] == 200 and run["output_tokens"] == 40 and run["iterations"] == 2
     assert abs(run["cost_usd"] - 0.02) < 1e-9
     assert db.usage_summary(1)["totals"]["runs"] == 1
+
+
+def test_printer_profiles(sf):
+    settings = sf["settings"]
+    store = settings.store
+    s = store.get()
+    assert len(s["printers"]) == 1 and s["printer"]["id"] == s["active_printer"]
+    printers = s["printers"] + [{"id": "mini", "name": "A1 mini", "bed_x": 180, "bed_y": 180, "bed_z": 180, "nozzle": 0.4}]
+    store.update({"printers": printers, "active_printer": "mini"})
+    assert store.get()["printer"]["bed_x"] == 180.0
+    # legacy single-printer patch edits the active profile
+    store.update({"printer": {"bed_z": 170}})
+    assert store.get()["printer"]["bed_z"] == 170.0 and len(store.get()["printers"]) == 2
+    with pytest.raises(ValueError):
+        store.update({"printers": []})
+    # removing the active profile falls back to the first one
+    store.update({"printers": [p for p in store.get()["printers"] if p["id"] != "mini"]})
+    assert store.get()["printer"]["id"] != "mini"
+
+
+def test_legacy_settings_migrate(sf):
+    cfg = sf["config"]
+    cfg.SETTINGS_FILE.write_text(json.dumps({"printer": {"name": "Old MK4", "bed_x": 250, "bed_y": 210, "bed_z": 220}}))
+    import os, time
+
+    os.utime(cfg.SETTINGS_FILE, (time.time() + 5, time.time() + 5))
+    s = sf["settings"].store.get()
+    assert s["printer"]["name"] == "Old MK4" and s["printer"]["bed_y"] == 210
+    assert "printer" not in json.loads(cfg.SETTINGS_FILE.read_text())
+
+
+@pytest.mark.skipif(__import__("shutil").which("openscad") is None, reason="OpenSCAD not installed")
+def test_checks_follow_active_printer(sf):
+    store, osc = sf["settings"].store, sf["openscad"]
+    store.update({"printers": [{"id": "big", "name": "Big", "bed_x": 300, "bed_y": 300, "bed_z": 300}, {"id": "small", "name": "Small", "bed_x": 180, "bed_y": 180, "bed_z": 180}], "active_printer": "big"})
+    _, big = asyncio.run(osc.validate("cube([200, 50, 10]);"))
+    store.update({"active_printer": "small"})
+    _, small = asyncio.run(osc.validate("cube([200, 50, 10]);"))
+    assert not big["issues"] and big["printer"] == "Big"
+    assert any("build volume" in i for i in small["issues"]) and small["printer"] == "Small"

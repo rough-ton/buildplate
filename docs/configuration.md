@@ -28,16 +28,22 @@ Buildplate has two kinds of configuration:
 | Preview size | 768 px | Resolution of the four-view preview sheet |
 | Extra instructions | empty | Added to every request |
 
-### Printer profile
+### Printers
 
-| Setting | Default | Used for |
+Save one profile per printer. One profile is active at a time; switch it in **Settings > Printers** or from the printer menu above the viewer in Studio. The switch is immediate.
+
+New profiles can start from a preset (Anycubic, Bambu Lab, Creality, Elegoo, Prusa, Sovol) or from a blank profile. Preset build volumes are the manufacturers' published figures; check them against your machine.
+
+| Field | Default | Used for |
 | --- | --- | --- |
-| Printer name | My printer | Shown in the viewer |
+| Name | My printer | Shown in Studio, on checks and in version history |
 | Bed X, Bed Y, Max height | 256 mm | Build volume checks and the viewer grid |
 | Nozzle | 0.4 mm | Minimum wall guidance and thin-part checks |
 | Layer height | 0.2 mm | Design guidance |
 | Fit clearance | 0.25 mm | Gap between mating parts |
 | Max overhang | 45 degrees | Design guidance |
+
+At least one profile must exist. Settings from earlier versions with a single printer are converted to a profile automatically.
 
 ### Rendering
 

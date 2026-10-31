@@ -109,6 +109,20 @@ async def get_parameters(code: str) -> list[dict[str, Any]]:
     return openscad.parse_parameters(code)
 
 
-@mcp.tool(description="Describe the configured printer profile and available OpenSCAD libraries.")
+@mcp.tool(description="Describe the active printer profile, all saved printer profiles, and available OpenSCAD libraries.")
 async def environment() -> dict[str, Any]:
-    return {"printer": store.get()["printer"], "libraries": openscad.list_libraries(), "openscad": openscad.detect()}
+    s = store.get()
+    return {
+        "active_printer": s["printer"],
+        "printers": [{"id": p["id"], "name": p["name"]} for p in s["printers"]],
+        "libraries": openscad.list_libraries(),
+        "openscad": openscad.detect(),
+    }
+
+
+@mcp.tool(description="Switch the active printer profile by id (see environment). Checks and new designs then use its build volume and tolerances.")
+async def set_printer(printer_id: str) -> dict[str, Any]:
+    if printer_id not in [p["id"] for p in store.get()["printers"]]:
+        return {"error": "No printer profile with that id"}
+    store.update({"active_printer": printer_id})
+    return {"active_printer": store.get()["printer"]}

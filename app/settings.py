@@ -83,16 +83,9 @@ DEFAULTS: dict[str, Any] = {
         "preview_size": 768,
         "extra_instructions": "",
     },
-    "printer": {
-        "name": "My printer",
-        "bed_x": 256,
-        "bed_y": 256,
-        "bed_z": 256,
-        "nozzle": 0.4,
-        "layer_height": 0.2,
-        "clearance": 0.25,
-        "max_overhang": 45,
-    },
+    # Saved printer profiles. The active one is exposed as settings["printer"].
+    "printers": [],
+    "active_printer": "",
     "render": {
         "backend": "auto",  # auto | manifold | cgal
         "timeout": 180,
@@ -107,6 +100,44 @@ DEFAULTS: dict[str, Any] = {
     "pricing": {"overrides": {}},
     "server": {"public_url": ""},
 }
+
+
+DEFAULT_PRINTER: dict[str, Any] = {
+    "id": "default",
+    "name": "My printer",
+    "bed_x": 256,
+    "bed_y": 256,
+    "bed_z": 256,
+    "nozzle": 0.4,
+    "layer_height": 0.2,
+    "clearance": 0.25,
+    "max_overhang": 45,
+}
+PRINTER_FIELDS = ("bed_x", "bed_y", "bed_z", "nozzle", "layer_height", "clearance", "max_overhang")
+
+
+def _migrate_printers(s: dict[str, Any]) -> bool:
+    """Older settings had a single "printer" object. Convert it to a saved profile."""
+    changed = False
+    legacy = s.pop("printer", None)
+    if not s.get("printers"):
+        base = dict(DEFAULT_PRINTER)
+        if isinstance(legacy, dict):
+            base.update({k: v for k, v in legacy.items() if k in PRINTER_FIELDS or k == "name"})
+        s["printers"] = [base]
+        changed = True
+    ids = [p["id"] for p in s["printers"]]
+    if s.get("active_printer") not in ids:
+        s["active_printer"] = ids[0]
+        changed = True
+    return changed or legacy is not None
+
+
+def active_printer(s: dict[str, Any]) -> dict[str, Any]:
+    for p in s["printers"]:
+        if p["id"] == s["active_printer"]:
+            return p
+    return s["printers"][0]
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -173,6 +204,8 @@ class SettingsStore:
                         raw = {}
                 self._cache = _deep_merge(DEFAULTS, raw)
                 self._mtime = mtime
+                if _migrate_printers(self._cache) and config.SETTINGS_FILE.exists():
+                    self._write(self._cache)
                 self._apply_env_bootstrap()
             return self._cache
 
@@ -222,6 +255,7 @@ class SettingsStore:
         for p in data["providers"].values():
             p["api_key"] = self._dec(p.get("api_key", ""))
         data["security"]["mcp_token"] = self._dec(data["security"].get("mcp_token", ""))
+        data["printer"] = copy.deepcopy(active_printer(data))
         return data
 
     def public(self) -> dict[str, Any]:
@@ -254,7 +288,12 @@ class SettingsStore:
             if "mcp_token" in patch.get("security", {}):
                 tok = patch["security"]["mcp_token"]
                 patch["security"]["mcp_token"] = self._enc(tok) if tok else ""
+            legacy_printer = patch.pop("printer", None)
             merged = _deep_merge(current, patch)
+            if isinstance(legacy_printer, dict):
+                # Older API shape: a single "printer" object edits the active profile.
+                target = active_printer(merged)
+                target.update({k: v for k, v in legacy_printer.items() if k in PRINTER_FIELDS or k == "name"})
             if "overrides" in (patch.get("pricing") or {}):
                 merged["pricing"]["overrides"] = patch["pricing"]["overrides"]
             _validate(merged)
@@ -280,6 +319,33 @@ class SettingsStore:
         return token
 
 
+def _validate_printers(s: dict[str, Any]) -> None:
+    printers = s.get("printers") or []
+    if not printers:
+        raise ValueError("Keep at least one printer profile.")
+    seen: set[str] = set()
+    clean = []
+    for p in printers:
+        pid = str(p.get("id") or "").strip() or secrets.token_hex(4)
+        if pid in seen:
+            pid = f"{pid}-{secrets.token_hex(2)}"
+        seen.add(pid)
+        out = {"id": pid, "name": (str(p.get("name") or "").strip() or "Printer")[:60]}
+        for k in PRINTER_FIELDS:
+            out[k] = float(p.get(k, DEFAULT_PRINTER[k]))
+        for k in ("bed_x", "bed_y", "bed_z"):
+            if not 20 <= out[k] <= 2000:
+                raise ValueError(f"{out['name']}: build volume must be between 20 and 2000 mm.")
+        if not 0.1 <= out["nozzle"] <= 2.0:
+            raise ValueError(f"{out['name']}: nozzle must be between 0.1 and 2 mm.")
+        if p.get("preset"):
+            out["preset"] = str(p["preset"])[:60]
+        clean.append(out)
+    s["printers"] = clean
+    if s.get("active_printer") not in seen:
+        s["active_printer"] = clean[0]["id"]
+
+
 def _validate(s: dict[str, Any]) -> None:
     a = s["agent"]
     a["max_iterations"] = max(1, min(int(a["max_iterations"]), 25))
@@ -295,9 +361,8 @@ def _validate(s: dict[str, Any]) -> None:
     r["max_parallel"] = max(1, min(int(r["max_parallel"]), 16))
     if r["backend"] not in ("auto", "manifold", "cgal"):
         r["backend"] = "auto"
-    p = s["printer"]
-    for k in ("bed_x", "bed_y", "bed_z", "nozzle", "layer_height", "clearance", "max_overhang"):
-        p[k] = float(p[k])
+    s.pop("printer", None)
+    _validate_printers(s)
 
 
 def hash_password(password: str) -> str:

@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
-from . import agent, auth, config, db, openscad, providers
+from . import agent, auth, config, db, openscad, printers, providers
 from .mcp_server import mcp
 from .settings import PROVIDERS, store
 
@@ -179,6 +179,25 @@ async def provider_models(provider: str, body: ModelsBody):
     patch["enabled"] = True
     store.update({"providers": {provider: patch}})
     return {"models": models, "count": len(models)}
+
+
+# ---- printers ------------------------------------------------------------------
+class ActivePrinterBody(BaseModel):
+    id: str
+
+
+@app.get("/api/printers/presets")
+async def printer_presets():
+    return {"presets": printers.presets()}
+
+
+@app.post("/api/printers/active")
+async def set_active_printer(body: ActivePrinterBody):
+    ids = [p["id"] for p in store.get()["printers"]]
+    if body.id not in ids:
+        raise HTTPException(404, "No printer profile with that id")
+    store.update({"active_printer": body.id})
+    return {"printer": store.get()["printer"]}
 
 
 # ---- system --------------------------------------------------------------------
