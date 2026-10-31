@@ -145,6 +145,10 @@ def test_printer_catalog():
     p1s = next(p for p in cat["printers"] if p["display"] == "Bambu Lab P1S")
     prof = printers.profile_from_catalog(p1s["key"], 0.6)
     assert prof["name"] == "Bambu Lab P1S 0.6 nozzle" and prof["nozzle"] == 0.6 and prof["bed_x"] == 256
+    assert prof["type"] == "corexy_enclosed"
+    types = {p["display"]: p["type"] for p in cat["printers"]}
+    assert types["Bambu Lab A1 mini"] == "cantilever" and types["Prusa MK4S"] == "bedslinger"
+    assert all(p["type"] == "delta" for p in cat["printers"] if p["shape"] == "round")
     assert any(p["shape"] == "round" for p in cat["printers"])
 
 

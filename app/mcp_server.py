@@ -133,7 +133,7 @@ async def find_printers(query: str, limit: int = 15) -> list[dict[str, Any]]:
     q = query.lower()
     hits = [p for p in printers.catalog()["printers"] if q in f"{p['vendor']} {p['model']}".lower()]
     return [
-        {"key": p["key"], "name": p["display"], "bed_mm": [p["bed_x"], p["bed_y"], p["bed_z"]], "shape": p["shape"], "nozzles": p["nozzles"]}
+        {"key": p["key"], "name": p["display"], "bed_mm": [p["bed_x"], p["bed_y"], p["bed_z"]], "shape": p["shape"], "type": p["type"], "nozzles": p["nozzles"]}
         for p in hits[:limit]
     ]
 

@@ -18,6 +18,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from printer_types import classify  # noqa: E402
+
 SKIP_VENDORS = {"Custom", "OrcaArena", "OrcaFilamentLibrary"}
 VENDOR_NAMES = {
     "BBL": "Bambu Lab",
@@ -140,6 +143,7 @@ def build(profiles_dir: Path) -> list[dict]:
                     "shape": area[2],
                     "nozzles": models.get(model) or [nozzle],
                     "_n": nozzle,
+                    "_structure": data.get("printer_structure"),
                 }
             elif nozzle not in printers[key]["nozzles"]:
                 printers[key]["nozzles"] = sorted(set(printers[key]["nozzles"]) | {nozzle})
@@ -147,6 +151,7 @@ def build(profiles_dir: Path) -> list[dict]:
     out = []
     for p in printers.values():
         p.pop("_n")
+        p["type"] = classify(p["vendor"], p["model"], p["shape"], p.pop("_structure", None))
         if not p["nozzles"]:
             p["nozzles"] = [0.4]
         p["display"] = p["model"] if p["model"].lower().startswith(p["vendor"].lower()) else f"{p['vendor']} {p['model']}"

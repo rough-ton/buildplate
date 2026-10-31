@@ -1,6 +1,7 @@
 // Buildplate web UI. Plain ES modules, no build step.
 import { Viewer } from "/viewer.js";
 import { marked } from "/vendor/marked/marked.esm.js";
+import { printerIcon, PRINTER_TYPES, typeLabel } from "/printer-icons.js";
 
 // ---------------------------------------------------------------- helpers
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -207,17 +208,19 @@ async function Studio(root, [designId]) {
     ...["iso", "front", "right", "top"].map((v) => h("button", { "data-view": v, class: v === "iso" ? "on" : "" }, v[0].toUpperCase() + v.slice(1))));
   const wireBtn = h("button", { class: "btn btn-sm" }, "Wireframe");
   const printerSel = h("select", { class: "printer-select", "aria-label": "Target printer" });
+  const printerIconEl = h("span", { class: "printer-chip-icon" });
   function fillPrinters() {
     const st = app.settings;
     printerSel.innerHTML = "";
     for (const pr of st.printers) printerSel.append(h("option", { value: pr.id, selected: pr.id === st.active_printer }, pr.name));
+    printerIconEl.innerHTML = printerIcon(st.printer.type);
     printerSel.title = `Target printer: ${st.printer.name}, ${+st.printer.bed_x} x ${+st.printer.bed_y} x ${+st.printer.bed_z} mm`;
     printerSel.append(h("option", { value: "__add" }, "Add printers..."));
     printerSel.append(h("option", { value: "__manage" }, "Manage printers..."));
   }
   fillPrinters();
   const stage = h("section", { class: "stage", "data-m": "stage" },
-    h("div", { class: "stage-bar" }, viewSeg, wireBtn, h("span", { class: "spacer" }), printerSel),
+    h("div", { class: "stage-bar" }, viewSeg, wireBtn, h("span", { class: "spacer" }), h("span", { class: "printer-chip" }, printerIconEl, printerSel)),
     viewEl, emptyEl, readout, busy);
 
   // ---- right: inspector
@@ -1035,8 +1038,10 @@ async function Settings(root) {
     for (const pr of draft.printers) {
       const active = pr.id === draft.active_printer;
       list.append(h("button", { class: `pcard ${pr.id === editId ? "on" : ""}`, role: "listitem", onclick: () => { editId = pr.id; renderPrinters(); } },
-        h("span", { class: "pcard-name" }, pr.name, active ? h("span", { class: "pill accent", style: "margin-left:8px" }, "Active") : null),
-        h("span", { class: "pcard-dims tabular" }, `${+pr.bed_x} x ${+pr.bed_y} x ${+pr.bed_z} mm, ${+pr.nozzle} mm nozzle`)));
+        h("span", { class: "pcard-icon", html: printerIcon(pr.type) }),
+        h("span", { class: "pcard-text" },
+          h("span", { class: "pcard-name" }, pr.name, active ? h("span", { class: "pill accent", style: "margin-left:8px" }, "Active") : null),
+          h("span", { class: "pcard-dims tabular" }, `${+pr.bed_x} x ${+pr.bed_y} x ${+pr.bed_z} mm, ${+pr.nozzle} mm nozzle`))));
     }
     const pr = draft.printers.find((x) => x.id === editId) || draft.printers[0];
     editId = pr.id;
@@ -1065,7 +1070,7 @@ async function Settings(root) {
     });
     const blankBtn = h("button", { class: "btn btn-ghost", onclick: () => {
       const id = `p${Date.now().toString(36)}`;
-      draft.printers.push({ id, name: "Custom printer", shape: "rect", bed_x: 220, bed_y: 220, bed_z: 250, nozzle: 0.4, layer_height: 0.2, clearance: 0.25, max_overhang: 45 });
+      draft.printers.push({ id, name: "Custom printer", shape: "rect", type: "generic", bed_x: 220, bed_y: 220, bed_z: 250, nozzle: 0.4, layer_height: 0.2, clearance: 0.25, max_overhang: 45 });
       editId = id; markDirty(); renderPrinters(); $("#pr-name")?.focus();
     } }, "Add custom printer");
     const isActive = pr.id === draft.active_printer;
@@ -1095,6 +1100,7 @@ async function Settings(root) {
           pf("Fit clearance (mm)", "clearance", "number", { step: 0.05 }, "Gap for parts that mate"),
           pf("Max overhang (deg)", "max_overhang", "number")),
         h("div", { class: "grid-4", style: "margin-top:16px" },
+          field("Printer type", (() => { const sel = h("select", { id: "pr-type" }, PRINTER_TYPES.map(([v, l]) => h("option", { value: v, selected: (pr.type || "generic") === v }, l))); sel.addEventListener("change", () => { pr.type = sel.value; markDirty(); const ic = $(".pcard.on .pcard-icon", list); if (ic) ic.innerHTML = printerIcon(pr.type); }); return sel; })(), "Sets the illustration"),
           field("Bed shape", (() => { const sel = h("select", { id: "pr-shape" }, h("option", { value: "rect", selected: pr.shape !== "round" }, "Rectangular"), h("option", { value: "round", selected: pr.shape === "round" }, "Round (delta)")); sel.addEventListener("change", () => { pr.shape = sel.value; markDirty(); }); return sel; })(), "For round beds, Bed X is the diameter")),
         pr.preset ? h("p", { class: "hint" }, "Values come from the printer catalog, which uses slicer printable areas. Adjust them if your machine differs.") : null),
       h("div", { class: "row printer-add" }, addBtn, blankBtn));
@@ -1172,6 +1178,7 @@ function profileFromCatalog(p, nozzle) {
     name: `${p.display} ${nz} nozzle`,
     preset: p.key,
     shape: p.shape || "rect",
+    type: p.type || "generic",
     bed_x: p.bed_x, bed_y: p.bed_y, bed_z: p.bed_z,
     nozzle: +nozzle,
     layer_height: Math.round(Math.min(Math.max(nozzle * 0.5, 0.08), 0.4) * 100) / 100,
@@ -1266,7 +1273,7 @@ async function openPrinterPicker(existingIds = []) {
         }
         const dims = p.shape === "round" ? `Round ${+p.bed_x} mm, ${+p.bed_z} mm tall` : `${+p.bed_x} x ${+p.bed_y} x ${+p.bed_z} mm`;
         const card = h("div", { class: `pp-card ${[...chosen.values()].some((x) => x.preset === p.key) ? "picked" : ""}` },
-          h("div", { class: "pp-art", html: bedSketch(p) }),
+          h("div", { class: "pp-art", title: typeLabel(p.type) }, h("div", { class: "pp-illo", html: printerIcon(p.type) }), h("div", { class: "pp-bed", title: "Build plate to scale", html: bedSketch(p) })),
           h("div", { class: "pp-name" }, q ? p.display : p.model),
           h("div", { class: "pp-dims tabular" }, dims),
           nozzles);

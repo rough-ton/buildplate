@@ -55,6 +55,7 @@ def profile_from_catalog(key: str, nozzle: float) -> dict[str, Any]:
         "name": f"{p['display']} {nz} nozzle",
         "preset": key,
         "shape": p.get("shape", "rect"),
+        "type": p.get("type", "generic"),
         "bed_x": p["bed_x"],
         "bed_y": p["bed_y"],
         "bed_z": p["bed_z"],
