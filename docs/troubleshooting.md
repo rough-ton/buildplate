@@ -41,6 +41,10 @@ Stop the container and edit `/data/settings.json`: set `"ui_password_hash"` unde
 
 Set `PUID` and `PGID` to the owner of the folder. On Unraid that is `99` and `100`. The container fixes ownership of `/data` on start when they differ.
 
+## Settings > System shows "OpenSCAD: Not working"
+
+The message after it is OpenSCAD's own error. A permission error on a `.config` folder means the image predates the fix for running as an unprivileged user; pull the latest image. Otherwise check `docker logs buildplate`.
+
 ## Library thumbnails are blank
 
 Thumbnails are rendered by OpenSCAD on first view. If they stay blank, check the container log for OpenSCAD errors and confirm the design still renders in Studio.

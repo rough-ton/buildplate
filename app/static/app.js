@@ -1122,7 +1122,7 @@ async function Settings(root) {
     section("system", "System", null,
       h("dl", { class: "kv" },
         h("dt", {}, "Buildplate"), h("dd", {}, sys.version),
-        h("dt", {}, "OpenSCAD"), h("dd", {}, `${p.version || "not found"}${p.manifold ? " with Manifold" : ""}`),
+        h("dt", {}, "OpenSCAD"), h("dd", {}, p.available ? `${p.version}${p.manifold ? " with Manifold" : ""}` : h("span", { style: "color:var(--bad)" }, `Not working: ${p.error || "not found"}`)),
         h("dt", {}, "Libraries"), h("dd", {}, sys.libraries.map((l) => l.name).join(", ") || "none"),
         h("dt", {}, "Your libraries folder"), h("dd", { class: "mono" }, sys.user_library_dir),
         h("dt", {}, "Data folder"), h("dd", { class: "mono" }, sys.data_dir),
