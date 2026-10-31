@@ -30,9 +30,11 @@ Buildplate has two kinds of configuration:
 
 ### Printers
 
-Save one profile per printer. One profile is active at a time; switch it in **Settings > Printers** or from the printer menu above the viewer in Studio. The switch is immediate.
+Save one profile per printer and nozzle size. One profile is active at a time; switch it in **Settings > Printers** or from the printer menu above the viewer in Studio. The switch is immediate.
 
-New profiles can start from a preset (Anycubic, Bambu Lab, Creality, Elegoo, Prusa, Sovol) or from a blank profile. Preset build volumes are the manufacturers' published figures; check them against your machine.
+**Add printers** opens the printer catalog: pick a manufacturer on the left (or search), then select the nozzle sizes you use on each printer. Each selection becomes a profile named like "Bambu Lab P1S 0.4 nozzle", with the printer's build volume, bed shape and sensible defaults for that nozzle. **Add custom printer** creates a blank profile for anything not in the catalog.
+
+The catalog lists over 400 printers from about 70 manufacturers. It is generated from OrcaSlicer's printer profiles, so build volumes are the slicer's usable printable area, which can be a few millimetres smaller than the marketing figure.
 
 | Field | Default | Used for |
 | --- | --- | --- |
@@ -42,6 +44,7 @@ New profiles can start from a preset (Anycubic, Bambu Lab, Creality, Elegoo, Pru
 | Layer height | 0.2 mm | Design guidance |
 | Fit clearance | 0.25 mm | Gap between mating parts |
 | Max overhang | 45 degrees | Design guidance |
+| Bed shape | Rectangular | Round for delta printers; Bed X is then the diameter |
 
 At least one profile must exist. Settings from earlier versions with a single printer are converted to a profile automatically.
 

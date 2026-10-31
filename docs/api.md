@@ -70,7 +70,8 @@ Event types, in order of appearance:
 | --- | --- |
 | `GET /api/settings` | Settings with secrets masked |
 | `PATCH /api/settings` | Partial update. Applied immediately |
-| `GET /api/printers/presets` | Printer presets used to start a new profile |
+| `GET /api/printers/catalog` | The printer catalog: manufacturers and printers with build volume, bed shape and nozzle sizes |
+| `POST /api/printers/add` | Add catalog printers as profiles: `{items: [{key, nozzle}], activate?}` |
 | `POST /api/printers/active` | Switch the active printer: `{id}` |
 | `POST /api/providers/{id}/models` | Test a provider and save its model list: `{api_key?, base_url?}` |
 | `POST /api/settings/password` | `{current, new}`; an empty `new` removes the password |
@@ -80,7 +81,7 @@ Event types, in order of appearance:
 | `POST /api/system/clear-cache` | Delete cached renders |
 | `GET /api/health` | Health check (no auth) |
 
-Printer profiles live in settings as `printers` (a list of `{id, name, bed_x, bed_y, bed_z, nozzle, layer_height, clearance, max_overhang}`) and `active_printer` (an id). A `PATCH` that includes `printers` replaces the whole list. `GET /api/settings` also returns the active profile as `printer`.
+Printer profiles live in settings as `printers` (a list of `{id, name, shape, bed_x, bed_y, bed_z, nozzle, layer_height, clearance, max_overhang, preset?}`) and `active_printer` (an id). A `PATCH` that includes `printers` replaces the whole list. `GET /api/settings` also returns the active profile as `printer`.
 
 Provider IDs: `anthropic`, `openai`, `gemini`, `openrouter`, `ollama`, `openai_compatible`.
 

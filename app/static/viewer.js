@@ -24,7 +24,7 @@ export class Viewer {
     const rim = new THREE.DirectionalLight(0xffffff, 0.5);
     rim.position.set(-1.5, 1.2, 0.6);
     this.scene.add(rim);
-    this.bed = { x: 256, y: 256 };
+    this.bed = { x: 256, y: 256, shape: "rect" };
     this.plate = null;
     this.mesh = null;
     this.edges = null;
@@ -46,9 +46,9 @@ export class Viewer {
     tick();
   }
 
-  setBed(x, y) {
-    if (x === this.bed.x && y === this.bed.y) return;
-    this.bed = { x, y };
+  setBed(x, y, shape = "rect") {
+    if (x === this.bed.x && y === this.bed.y && shape === this.bed.shape) return;
+    this.bed = { x, y: shape === "round" ? x : y, shape };
     this.buildPlate();
   }
 
@@ -58,29 +58,34 @@ export class Viewer {
     const { x, y } = this.bed;
     const major = new THREE.Color(css("--grid-major") || "#B7C1CB");
     const minor = new THREE.Color(css("--grid-minor") || "#CDD5DD");
+    const round = this.bed.shape === "round";
+    const r = x / 2;
     const surface = new THREE.Mesh(
-      new THREE.PlaneGeometry(x, y),
+      round ? new THREE.CircleGeometry(r, 96) : new THREE.PlaneGeometry(x, y),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(css("--viewer-bg") || "#E4E9EE").offsetHSL(0, 0, 0.025), transparent: true, opacity: 0.9 })
     );
     surface.position.z = -0.05;
     g.add(surface);
     const pts = { major: [], minor: [] };
+    // Grid lines every 10 mm, bold every 50 mm, clipped to a circle on round beds.
+    const span = (c, half) => (round ? Math.sqrt(Math.max(0, r * r - c * c)) : half);
     for (let i = -Math.floor(x / 2 / 10) * 10; i <= x / 2; i += 10) {
-      (i % 50 === 0 ? pts.major : pts.minor).push(i, -y / 2, 0, i, y / 2, 0);
+      const e = span(i, y / 2);
+      if (e > 0) (i % 50 === 0 ? pts.major : pts.minor).push(i, -e, 0, i, e, 0);
     }
     for (let j = -Math.floor(y / 2 / 10) * 10; j <= y / 2; j += 10) {
-      (j % 50 === 0 ? pts.major : pts.minor).push(-x / 2, j, 0, x / 2, j, 0);
+      const e = span(j, x / 2);
+      if (e > 0) (j % 50 === 0 ? pts.major : pts.minor).push(-e, j, 0, e, j, 0);
     }
     for (const [k, color] of [["minor", minor], ["major", major]]) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(pts[k], 3));
       g.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color })));
     }
-    const border = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-x / 2, -y / 2, 0), new THREE.Vector3(x / 2, -y / 2, 0),
-      new THREE.Vector3(x / 2, y / 2, 0), new THREE.Vector3(-x / 2, y / 2, 0), new THREE.Vector3(-x / 2, -y / 2, 0),
-    ]);
-    g.add(new THREE.Line(border, new THREE.LineBasicMaterial({ color: major })));
+    const outline = round
+      ? Array.from({ length: 129 }, (_, i) => new THREE.Vector3(r * Math.cos((i / 128) * Math.PI * 2), r * Math.sin((i / 128) * Math.PI * 2), 0))
+      : [new THREE.Vector3(-x / 2, -y / 2, 0), new THREE.Vector3(x / 2, -y / 2, 0), new THREE.Vector3(x / 2, y / 2, 0), new THREE.Vector3(-x / 2, y / 2, 0), new THREE.Vector3(-x / 2, -y / 2, 0)];
+    g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outline), new THREE.LineBasicMaterial({ color: major })));
     const axis = (to, color) => {
       const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0.02), to]);
       g.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color })));

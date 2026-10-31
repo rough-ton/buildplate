@@ -70,7 +70,9 @@ def system_prompt(vision: bool) -> str:
         "  OpenSCAD Customizer syntax: a comment line describing the parameter, then `name = value; // [min:step:max]`.",
         "  Group them with `/* [Section Name] */` headers. Put $fn and internal constants under `/* [Hidden] */`.",
         "- Use modules for logical sub-parts and keep the code readable and commented.",
-        f"- Design for this printer: '{p['name']}', build volume {p['bed_x']:g} x {p['bed_y']:g} x {p['bed_z']:g} mm,",
+        (f"- Design for this printer: '{p['name']}', round bed {p['bed_x']:g} mm diameter, {p['bed_z']:g} mm tall build volume (delta),"
+         if p.get("shape") == "round" else
+         f"- Design for this printer: '{p['name']}', build volume {p['bed_x']:g} x {p['bed_y']:g} x {p['bed_z']:g} mm,"),
         f"  {p['nozzle']:g} mm nozzle, {p['layer_height']:g} mm layers. Use {p['clearance']:g} mm clearance for mating parts.",
         f"- Avoid overhangs steeper than {p['max_overhang']:g} degrees from vertical unless unavoidable; prefer chamfers",
         "  to fillets on downward-facing edges. Minimum wall thickness: at least 2 nozzle widths.",

@@ -186,9 +186,42 @@ class ActivePrinterBody(BaseModel):
     id: str
 
 
-@app.get("/api/printers/presets")
-async def printer_presets():
-    return {"presets": printers.presets()}
+class CatalogItem(BaseModel):
+    key: str
+    nozzle: float
+
+
+class AddPrintersBody(BaseModel):
+    items: list[CatalogItem] = Field(min_length=1, max_length=100)
+    activate: bool = False
+
+
+@app.get("/api/printers/catalog")
+async def printer_catalog():
+    return printers.catalog()
+
+
+@app.post("/api/printers/add")
+async def add_printers(body: AddPrintersBody):
+    s = store.get()
+    profiles = list(s["printers"])
+    have = {p["id"] for p in profiles}
+    added = []
+    for it in body.items:
+        try:
+            prof = printers.profile_from_catalog(it.key, it.nozzle)
+        except KeyError:
+            raise HTTPException(404, f"Unknown printer: {it.key}")
+        if prof["id"] not in have:
+            profiles.append(prof)
+            have.add(prof["id"])
+            added.append(prof["id"])
+    patch: dict[str, Any] = {"printers": profiles}
+    target = added[0] if added else printers.profile_from_catalog(body.items[0].key, body.items[0].nozzle)["id"]
+    if body.activate:
+        patch["active_printer"] = target
+    store.update(patch)
+    return {"added": added, "settings": store.public()}
 
 
 @app.post("/api/printers/active")

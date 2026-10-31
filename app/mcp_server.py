@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import Image, MCPServer
 
-from . import agent, config, db, openscad
+from . import agent, config, db, openscad, printers
 from .settings import store
 
 mcp = MCPServer(
@@ -126,3 +126,30 @@ async def set_printer(printer_id: str) -> dict[str, Any]:
         return {"error": "No printer profile with that id"}
     store.update({"active_printer": printer_id})
     return {"active_printer": store.get()["printer"]}
+
+
+@mcp.tool(description="Search the printer catalog (hundreds of models from all major manufacturers) by name. Returns keys and nozzle sizes for add_printer.")
+async def find_printers(query: str, limit: int = 15) -> list[dict[str, Any]]:
+    q = query.lower()
+    hits = [p for p in printers.catalog()["printers"] if q in f"{p['vendor']} {p['model']}".lower()]
+    return [
+        {"key": p["key"], "name": p["display"], "bed_mm": [p["bed_x"], p["bed_y"], p["bed_z"]], "shape": p["shape"], "nozzles": p["nozzles"]}
+        for p in hits[:limit]
+    ]
+
+
+@mcp.tool(description="Add a printer profile from the catalog (see find_printers) and optionally make it the active printer.")
+async def add_printer(key: str, nozzle: float = 0.4, activate: bool = True) -> dict[str, Any]:
+    try:
+        prof = printers.profile_from_catalog(key, nozzle)
+    except KeyError:
+        return {"error": "Unknown printer key. Use find_printers first."}
+    s = store.get()
+    profiles = list(s["printers"])
+    if prof["id"] not in {p["id"] for p in profiles}:
+        profiles.append(prof)
+    patch: dict[str, Any] = {"printers": profiles}
+    if activate:
+        patch["active_printer"] = prof["id"]
+    store.update(patch)
+    return {"added": prof, "active_printer": store.get()["printer"]["name"]}

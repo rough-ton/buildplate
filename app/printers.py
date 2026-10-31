@@ -1,49 +1,65 @@
-"""Printer presets used to pre-fill a new profile.
+"""Printer catalog used to create profiles.
 
-Build volumes are the manufacturers' published figures in millimetres. They are a
-starting point: users can edit every value, and should check their own machine.
+The catalog in data/printer_db.json is generated from OrcaSlicer's printer profiles by
+tools/build_printer_db.py. It holds factual machine data only: manufacturer, model,
+printable area, printable height, bed shape and nozzle sizes. Printable volumes are the
+slicer's usable values, which can be slightly smaller than marketing figures.
 """
 
 from __future__ import annotations
 
+import json
 import re
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
 
-PRESETS: list[dict] = [
-    {"brand": "Anycubic", "model": "Kobra 3", "bed_x": 250, "bed_y": 250, "bed_z": 260},
-    {"brand": "Bambu Lab", "model": "A1", "bed_x": 256, "bed_y": 256, "bed_z": 256},
-    {"brand": "Bambu Lab", "model": "A1 mini", "bed_x": 180, "bed_y": 180, "bed_z": 180},
-    {"brand": "Bambu Lab", "model": "P1P / P1S", "bed_x": 256, "bed_y": 256, "bed_z": 256},
-    {"brand": "Bambu Lab", "model": "X1 Carbon / X1E", "bed_x": 256, "bed_y": 256, "bed_z": 256},
-    {"brand": "Creality", "model": "Ender 3 V2", "bed_x": 220, "bed_y": 220, "bed_z": 250},
-    {"brand": "Creality", "model": "Ender 3 V3 SE", "bed_x": 220, "bed_y": 220, "bed_z": 250},
-    {"brand": "Creality", "model": "K1 / K1C", "bed_x": 220, "bed_y": 220, "bed_z": 250},
-    {"brand": "Creality", "model": "K1 Max", "bed_x": 300, "bed_y": 300, "bed_z": 300},
-    {"brand": "Elegoo", "model": "Centauri Carbon", "bed_x": 256, "bed_y": 256, "bed_z": 256},
-    {"brand": "Elegoo", "model": "Neptune 4 Pro", "bed_x": 225, "bed_y": 225, "bed_z": 265},
-    {"brand": "Prusa", "model": "CORE One", "bed_x": 250, "bed_y": 220, "bed_z": 270},
-    {"brand": "Prusa", "model": "MINI+", "bed_x": 180, "bed_y": 180, "bed_z": 180},
-    {"brand": "Prusa", "model": "MK3S+", "bed_x": 250, "bed_y": 210, "bed_z": 210},
-    {"brand": "Prusa", "model": "MK4 / MK4S", "bed_x": 250, "bed_y": 210, "bed_z": 220},
-    {"brand": "Prusa", "model": "XL", "bed_x": 360, "bed_y": 360, "bed_z": 360},
-    {"brand": "Sovol", "model": "SV06", "bed_x": 220, "bed_y": 220, "bed_z": 250},
-]
+DB_FILE = Path(__file__).parent / "data" / "printer_db.json"
 
 
-def presets() -> list[dict]:
-    out = []
-    for p in PRESETS:
-        out.append(
-            {
-                "key": re.sub(r"[^a-z0-9]+", "-", f"{p['brand']} {p['model']}".lower()).strip("-"),
-                "name": f"{p['brand']} {p['model']}",
-                "brand": p["brand"],
-                "bed_x": p["bed_x"],
-                "bed_y": p["bed_y"],
-                "bed_z": p["bed_z"],
-                "nozzle": p.get("nozzle", 0.4),
-                "layer_height": 0.2,
-                "clearance": 0.25,
-                "max_overhang": 45,
-            }
-        )
-    return out
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+@lru_cache(maxsize=1)
+def catalog() -> dict[str, Any]:
+    raw = json.loads(DB_FILE.read_text(encoding="utf-8"))
+    printers = []
+    for p in raw["printers"]:
+        printers.append({**p, "key": _slug(f"{p['vendor']} {p['model']}")})
+    vendors: dict[str, int] = {}
+    for p in printers:
+        vendors[p["vendor"]] = vendors.get(p["vendor"], 0) + 1
+    return {
+        "source": raw.get("source", ""),
+        "generated": raw.get("generated", ""),
+        "vendors": [{"name": v, "count": n} for v, n in sorted(vendors.items(), key=lambda kv: kv[0].lower())],
+        "printers": printers,
+    }
+
+
+def find(key: str) -> dict[str, Any] | None:
+    for p in catalog()["printers"]:
+        if p["key"] == key:
+            return p
+    return None
+
+
+def profile_from_catalog(key: str, nozzle: float) -> dict[str, Any]:
+    p = find(key)
+    if p is None:
+        raise KeyError(key)
+    nz = f"{nozzle:g}"
+    return {
+        "id": f"{key}-{nz.replace('.', '')}",
+        "name": f"{p['display']} {nz} nozzle",
+        "preset": key,
+        "shape": p.get("shape", "rect"),
+        "bed_x": p["bed_x"],
+        "bed_y": p["bed_y"],
+        "bed_z": p["bed_z"],
+        "nozzle": nozzle,
+        "layer_height": round(min(max(nozzle * 0.5, 0.08), 0.4), 2),
+        "clearance": 0.2 if nozzle <= 0.25 else 0.25 if nozzle <= 0.5 else 0.35,
+        "max_overhang": 45,
+    }
