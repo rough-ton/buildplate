@@ -78,7 +78,7 @@ Every generation and every saved edit is a version. Open one from the **History*
 
 ## Choosing the printer
 
-The menu at the top right of the viewer selects the target printer. Switching redraws the build plate at that printer's size, re-runs the checks on the current part, and makes the agent design to that printer's build volume, nozzle and clearance from the next request on. Choose **Manage printers...** to add or edit profiles.
+The menu at the top right of the viewer selects the target printer. Switching redraws the build plate at that printer's size, re-runs the checks on the current part, and makes the agent design to that printer's build volume, nozzle and clearance from the next request on. Choose **Add printers...** to pick more printers from the catalog without leaving Studio, or **Manage printers...** to edit profiles.
 
 Each version records the printer it was checked against, shown in the **History** and **Checks** tabs.
 
@@ -88,7 +88,7 @@ Each version records the printer it was checked against, shown in the **History*
 - **Iso**, **Front**, **Right** and **Top** frame the part from that side.
 - **Wireframe** shows the mesh triangles.
 
-The grid matches your printer profile, with fine lines every 10 mm and bold lines every 50 mm. The red and green lines mark the X and Y axes at the origin.
+The grid matches your printer profile, with fine lines every 10 mm and bold lines every 50 mm. Delta printers get a round plate. The red and green lines mark the X and Y axes at the origin.
 
 ## Exporting
 

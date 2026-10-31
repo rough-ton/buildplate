@@ -330,7 +330,16 @@ def mesh_stats(stl_path: Path) -> dict[str, Any]:
     issues: list[str] = []
     if not mesh.is_watertight:
         issues.append("Mesh is not watertight (non-manifold); slicers may misbehave.")
-    if ext[0] > s["bed_x"] or ext[1] > s["bed_y"] or ext[2] > s["bed_z"]:
+    if s.get("shape") == "round":
+        import numpy as np
+
+        reach = float(np.max(np.hypot(mesh.vertices[:, 0], mesh.vertices[:, 1]))) if len(mesh.vertices) else 0.0
+        if reach > s["bed_x"] / 2 or ext[2] > s["bed_z"]:
+            issues.append(
+                f"Part reaches {reach:.1f} mm from the centre and is {ext[2]:.1f} mm tall; the round bed allows "
+                f"{s['bed_x'] / 2:.0f} mm radius and {s['bed_z']:.0f} mm height. Centre the part on the origin or make it smaller."
+            )
+    elif ext[0] > s["bed_x"] or ext[1] > s["bed_y"] or ext[2] > s["bed_z"]:
         issues.append(
             f"Part ({ext[0]:.1f} x {ext[1]:.1f} x {ext[2]:.1f} mm) exceeds the build volume "
             f"({s['bed_x']:.0f} x {s['bed_y']:.0f} x {s['bed_z']:.0f} mm)."

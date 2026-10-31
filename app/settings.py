@@ -105,6 +105,7 @@ DEFAULTS: dict[str, Any] = {
 DEFAULT_PRINTER: dict[str, Any] = {
     "id": "default",
     "name": "My printer",
+    "shape": "rect",
     "bed_x": 256,
     "bed_y": 256,
     "bed_z": 256,
@@ -339,7 +340,8 @@ def _validate_printers(s: dict[str, Any]) -> None:
         if not 0.1 <= out["nozzle"] <= 2.0:
             raise ValueError(f"{out['name']}: nozzle must be between 0.1 and 2 mm.")
         if p.get("preset"):
-            out["preset"] = str(p["preset"])[:60]
+            out["preset"] = str(p["preset"])[:80]
+        out["shape"] = "round" if p.get("shape") == "round" else "rect"
         clean.append(out)
     s["printers"] = clean
     if s.get("active_printer") not in seen:

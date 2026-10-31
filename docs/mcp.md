@@ -17,6 +17,8 @@ The endpoint uses the Streamable HTTP transport.
 | `get_parameters` | Extracts Customizer parameters from code |
 | `environment` | Returns the active printer, all saved printer profiles, available libraries and the OpenSCAD version |
 | `set_printer` | Switches the active printer profile by id |
+| `find_printers` | Searches the printer catalog by name |
+| `add_printer` | Adds a catalog printer with a nozzle size as a profile, optionally making it active |
 
 With `check_design` and `save_design`, the client's own model does the design work and Buildplate supplies rendering, validation and storage. With `generate_design`, Buildplate's configured model does the work and the client just receives the result.
 

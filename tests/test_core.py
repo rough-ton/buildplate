@@ -133,3 +133,26 @@ def test_checks_follow_active_printer(sf):
     _, small = asyncio.run(osc.validate("cube([200, 50, 10]);"))
     assert not big["issues"] and big["printer"] == "Big"
     assert any("build volume" in i for i in small["issues"]) and small["printer"] == "Small"
+
+
+def test_printer_catalog():
+    from app import printers
+
+    cat = printers.catalog()
+    assert len(cat["printers"]) > 200 and len(cat["vendors"]) > 30
+    names = {p["display"] for p in cat["printers"]}
+    assert {"Bambu Lab P1S", "Prusa MK4S"} <= names
+    p1s = next(p for p in cat["printers"] if p["display"] == "Bambu Lab P1S")
+    prof = printers.profile_from_catalog(p1s["key"], 0.6)
+    assert prof["name"] == "Bambu Lab P1S 0.6 nozzle" and prof["nozzle"] == 0.6 and prof["bed_x"] == 256
+    assert any(p["shape"] == "round" for p in cat["printers"])
+
+
+@pytest.mark.skipif(__import__("shutil").which("openscad") is None, reason="OpenSCAD not installed")
+def test_round_bed_check(sf):
+    store, osc = sf["settings"].store, sf["openscad"]
+    store.update({"printers": [{"id": "delta", "name": "Delta", "shape": "round", "bed_x": 200, "bed_y": 200, "bed_z": 300}], "active_printer": "delta"})
+    _, ok = asyncio.run(osc.validate("translate([-60, -60, 0]) cube([120, 120, 10]);"))
+    _, bad = asyncio.run(osc.validate("translate([-80, -80, 0]) cube([160, 160, 10]);"))
+    assert not ok["issues"]
+    assert any("round bed" in i for i in bad["issues"])

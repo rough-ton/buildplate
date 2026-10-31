@@ -21,7 +21,7 @@ Buildplate runs as a single Docker container. Point it at the AI provider you al
 - **Bring any model.** Claude, OpenAI, Gemini, OpenRouter, Ollama, LM Studio, vLLM and other OpenAI-compatible servers. Switch models per request.
 - **Configure everything in the browser.** Add API keys, connect providers, pick models, change your printer profile and limits. Changes are live immediately; nothing restarts or rebuilds.
 - **A design loop that checks its own work.** The agent renders every draft, validates it (watertight, on the bed, inside your build volume) and, with vision-capable models, reviews a four-view preview before saving.
-- **All your printers.** Save a profile per printer, start from presets for popular models, and switch the target printer from Studio. The plate, checks and design limits follow.
+- **Every major printer.** Pick yours from a catalog of 400+ printers from about 70 manufacturers, with the nozzle sizes you use, and switch the target printer from Studio. The plate, checks and design limits follow, including round beds for deltas.
 - **Live parameters.** Customizer variables become sliders. Drag one and the part re-renders in seconds without spending a single token.
 - **Token and cost tracking.** Each request shows input, output and cached tokens plus cost, with a per-step breakdown, daily charts, per-model totals and CSV export.
 - **Library with version history.** Every generation and manual edit is a version you can reopen, compare and export.
@@ -59,6 +59,10 @@ Images are built and published by GitHub Actions on every release. You never nee
 | Library | Usage |
 | --- | --- |
 | <img src="assets/screenshots/library.png" alt="Library of saved designs" width="440"> | <img src="assets/screenshots/usage.png" alt="Token usage dashboard" width="440"> |
+
+| Printer catalog | |
+| --- | --- |
+| <img src="assets/screenshots/printers.png" alt="Add printers dialog with manufacturers and nozzle sizes" width="440"> | |
 
 | Settings | Dark mode |
 | --- | --- |
@@ -111,4 +115,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for running from source and the release p
 
 ## License
 
-[MIT](LICENSE). Bundled third-party components keep their own licenses: OpenSCAD (GPL-2.0, used as a separate program), BOSL2 (BSD-2-Clause), MCAD (LGPL-2.1), three.js (MIT), CodeMirror (MIT), marked (MIT), IBM Plex (OFL-1.1).
+[MIT](LICENSE). Bundled third-party components keep their own licenses: OpenSCAD (GPL-2.0, used as a separate program), printer catalog data derived from [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) profiles (AGPL-3.0), BOSL2 (BSD-2-Clause), MCAD (LGPL-2.1), three.js (MIT), CodeMirror (MIT), marked (MIT), IBM Plex (OFL-1.1).

@@ -66,3 +66,15 @@ gh release create v0.2.0 --generate-notes
    docker logout ghcr.io; docker pull ghcr.io/rough-ton/buildplate:edge
    ```
 3. In the package settings, under **Manage Actions access**, confirm the repository has write access (it does by default when the workflow created the package).
+
+## Updating the printer catalog
+
+`app/data/printer_db.json` is generated from OrcaSlicer's printer profiles. The **Refresh printer catalog** workflow runs monthly (or on demand from the Actions tab) and opens a pull request when the list changes. To run it by hand:
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/SoftFever/OrcaSlicer /tmp/orca
+git -C /tmp/orca sparse-checkout set resources/profiles
+python3 tools/build_printer_db.py /tmp/orca
+```
+
+The workflow needs **Settings > Actions > General > Allow GitHub Actions to create and approve pull requests** turned on.

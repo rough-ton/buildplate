@@ -212,6 +212,7 @@ async function Studio(root, [designId]) {
     printerSel.innerHTML = "";
     for (const pr of st.printers) printerSel.append(h("option", { value: pr.id, selected: pr.id === st.active_printer }, pr.name));
     printerSel.title = `Target printer: ${st.printer.name}, ${+st.printer.bed_x} x ${+st.printer.bed_y} x ${+st.printer.bed_z} mm`;
+    printerSel.append(h("option", { value: "__add" }, "Add printers..."));
     printerSel.append(h("option", { value: "__manage" }, "Manage printers..."));
   }
   fillPrinters();
@@ -239,8 +240,23 @@ async function Studio(root, [designId]) {
   });
 
   const viewer = new Viewer(viewEl);
-  viewer.setBed(settings.printer.bed_x, settings.printer.bed_y);
+  viewer.setBed(settings.printer.bed_x, settings.printer.bed_y, settings.printer.shape);
   printerSel.addEventListener("change", async () => {
+    if (printerSel.value === "__add") {
+      fillPrinters();
+      const picked = await openPrinterPicker(app.settings.printers.map((x) => x.id));
+      if (!picked.length) return;
+      try {
+        await api("/api/printers/add", { method: "POST", json: { items: picked.map((x) => ({ key: x.preset, nozzle: x.nozzle })), activate: true } });
+        await loadSettings();
+        fillPrinters();
+        const pr = app.settings.printer;
+        viewer.setBed(pr.bed_x, pr.bed_y, pr.shape);
+        toast(`Designing for ${pr.name}`);
+        if (s.code.trim()) renderModel();
+      } catch (err) { toast(err.message, "bad"); }
+      return;
+    }
     if (printerSel.value === "__manage") {
       sessionStorage.setItem("bp-jump", "printer");
       location.hash = "#/settings";
@@ -250,7 +266,7 @@ async function Studio(root, [designId]) {
       await api("/api/printers/active", { method: "POST", json: { id: printerSel.value } });
       await loadSettings();
       const pr = app.settings.printer;
-      viewer.setBed(pr.bed_x, pr.bed_y);
+      viewer.setBed(pr.bed_x, pr.bed_y, pr.shape);
       fillPrinters();
       toast(`Designing for ${pr.name}`);
       if (s.code.trim()) renderModel();
@@ -1011,7 +1027,6 @@ async function Settings(root) {
   }
 
   // ---- printers
-  const presets = (await api("/api/printers/presets")).presets;
   const printerWrap = h("div", {});
   let editId = draft.active_printer;
   function renderPrinters() {
@@ -1038,23 +1053,21 @@ async function Settings(root) {
       });
       return field(label, el, hint);
     };
-    const presetSel = h("select", { "aria-label": "Start from" },
-      h("option", { value: "" }, "Blank profile"),
-      ...Object.entries(presets.reduce((g, p) => ((g[p.brand] ||= []).push(p), g), {})).map(([brand, items]) =>
-        h("optgroup", { label: brand }, items.map((p) => h("option", { value: p.key }, p.name)))));
-    const addBtn = h("button", { class: "btn", html: icons.plus + "Add printer" });
-    addBtn.addEventListener("click", () => {
-      const base = presets.find((p) => p.key === presetSel.value);
-      const id = `p${Date.now().toString(36)}`;
-      const np = base
-        ? { id, preset: base.key, name: base.name, bed_x: base.bed_x, bed_y: base.bed_y, bed_z: base.bed_z, nozzle: base.nozzle, layer_height: base.layer_height, clearance: base.clearance, max_overhang: base.max_overhang }
-        : { id, name: "New printer", bed_x: 220, bed_y: 220, bed_z: 250, nozzle: 0.4, layer_height: 0.2, clearance: 0.25, max_overhang: 45 };
-      draft.printers.push(np);
-      editId = id;
+    const addBtn = h("button", { class: "btn btn-primary", html: icons.plus + "Add printers" });
+    addBtn.addEventListener("click", async () => {
+      const picked = await openPrinterPicker(draft.printers.map((x) => x.id));
+      if (!picked.length) return;
+      for (const prof of picked) if (!draft.printers.some((x) => x.id === prof.id)) draft.printers.push(prof);
+      editId = picked[0].id;
       markDirty();
       renderPrinters();
-      $("#pr-name")?.focus();
+      toast(`${picked.length} printer${picked.length > 1 ? "s" : ""} added. Save changes to keep ${picked.length > 1 ? "them" : "it"}.`);
     });
+    const blankBtn = h("button", { class: "btn btn-ghost", onclick: () => {
+      const id = `p${Date.now().toString(36)}`;
+      draft.printers.push({ id, name: "Custom printer", shape: "rect", bed_x: 220, bed_y: 220, bed_z: 250, nozzle: 0.4, layer_height: 0.2, clearance: 0.25, max_overhang: 45 });
+      editId = id; markDirty(); renderPrinters(); $("#pr-name")?.focus();
+    } }, "Add custom printer");
     const isActive = pr.id === draft.active_printer;
     printerWrap.append(
       list,
@@ -1081,8 +1094,10 @@ async function Settings(root) {
           pf("Layer height (mm)", "layer_height", "number", { step: 0.02 }),
           pf("Fit clearance (mm)", "clearance", "number", { step: 0.05 }, "Gap for parts that mate"),
           pf("Max overhang (deg)", "max_overhang", "number")),
-        pr.preset ? h("p", { class: "hint" }, "Started from a preset. Build volumes are the manufacturer's published figures; check them against your machine.") : null),
-      h("div", { class: "row printer-add" }, h("label", { style: "margin:0" }, "Start from"), presetSel, addBtn));
+        h("div", { class: "grid-4", style: "margin-top:16px" },
+          field("Bed shape", (() => { const sel = h("select", { id: "pr-shape" }, h("option", { value: "rect", selected: pr.shape !== "round" }, "Rectangular"), h("option", { value: "round", selected: pr.shape === "round" }, "Round (delta)")); sel.addEventListener("change", () => { pr.shape = sel.value; markDirty(); }); return sel; })(), "For round beds, Bed X is the diameter")),
+        pr.preset ? h("p", { class: "hint" }, "Values come from the printer catalog, which uses slicer printable areas. Adjust them if your machine differs.") : null),
+      h("div", { class: "row printer-add" }, addBtn, blankBtn));
   }
 
   const p = sys.openscad;
@@ -1140,6 +1155,136 @@ async function Settings(root) {
   const beforeUnload = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } };
   window.addEventListener("beforeunload", beforeUnload);
   return () => window.removeEventListener("beforeunload", beforeUnload);
+}
+
+
+// ================================================================= PRINTER PICKER
+let catalogCache = null;
+async function printerCatalog() {
+  catalogCache ||= await api("/api/printers/catalog");
+  return catalogCache;
+}
+
+function profileFromCatalog(p, nozzle) {
+  const nz = String(+nozzle);
+  return {
+    id: `${p.key}-${nz.replace(".", "")}`,
+    name: `${p.display} ${nz} nozzle`,
+    preset: p.key,
+    shape: p.shape || "rect",
+    bed_x: p.bed_x, bed_y: p.bed_y, bed_z: p.bed_z,
+    nozzle: +nozzle,
+    layer_height: Math.round(Math.min(Math.max(nozzle * 0.5, 0.08), 0.4) * 100) / 100,
+    clearance: nozzle <= 0.25 ? 0.2 : nozzle <= 0.5 ? 0.25 : 0.35,
+    max_overhang: 45,
+  };
+}
+
+function bedSketch(p) {
+  const S = 64, m = 4;
+  // Drawn to a shared scale so a bigger printer looks bigger (400 mm fills the box).
+  const k = (S - 2 * m) / Math.max(400, p.bed_x, p.bed_y);
+  const w = p.bed_x * k, hgt = p.bed_y * k;
+  const x = (S - w) / 2, y = (S - hgt) / 2;
+  const shape = p.shape === "round"
+    ? `<circle cx="${S / 2}" cy="${S / 2}" r="${w / 2}" class="bed"/>`
+    : `<rect x="${x}" y="${y}" width="${w}" height="${hgt}" rx="3" class="bed"/>`;
+  let grid = "";
+  for (let i = 1; i < 4; i++) {
+    grid += `<line x1="${x + (w * i) / 4}" y1="${y}" x2="${x + (w * i) / 4}" y2="${y + hgt}"/><line x1="${x}" y1="${y + (hgt * i) / 4}" x2="${x + w}" y2="${y + (hgt * i) / 4}"/>`;
+  }
+  const clip = p.shape === "round" ? `<clipPath id="c-${p.key}"><circle cx="${S / 2}" cy="${S / 2}" r="${w / 2}"/></clipPath>` : "";
+  return `<svg viewBox="0 0 ${S} ${S}" class="bed-sketch" aria-hidden="true">${clip}${shape}<g class="grid" ${clip ? `clip-path="url(#c-${p.key})"` : ""}>${grid}</g></svg>`;
+}
+
+// Opens the "Add printers" dialog. Resolves with the profiles the user picked
+// (one per printer and nozzle size), or [] if cancelled.
+async function openPrinterPicker(existingIds = []) {
+  const cat = await printerCatalog();
+  const existing = new Set(existingIds);
+  const chosen = new Map(); // id -> profile
+  return new Promise((resolve) => {
+    let vendor = "Bambu Lab";
+    if (!cat.vendors.some((v) => v.name === vendor)) vendor = cat.vendors[0].name;
+    const search = h("input", { type: "text", placeholder: `Search ${cat.printers.length} printers`, "aria-label": "Search printers" });
+    const vendorList = h("div", { class: "pp-vendors", role: "listbox", "aria-label": "Manufacturers" });
+    const grid = h("div", { class: "pp-grid" });
+    const count = h("span", { class: "pp-count" });
+    const addBtn = h("button", { class: "btn btn-primary", disabled: true }, "Add printers");
+    const cancelBtn = h("button", { class: "btn" }, "Cancel");
+    const dialog = h("dialog", { class: "pp", "aria-label": "Add printers" },
+      h("div", { class: "pp-head" },
+        h("div", {}, h("h2", {}, "Add printers"), h("p", {}, "Pick your printers and the nozzle sizes you use. Each choice becomes a profile.")),
+        search),
+      h("div", { class: "pp-body" }, vendorList, grid),
+      h("div", { class: "pp-foot" }, count, h("span", { class: "spacer" }), h("span", { class: "hint", style: "margin:0" }, `Catalog from ${cat.source.split(" (")[0]}, ${cat.generated}`), cancelBtn, addBtn));
+    document.body.append(dialog);
+
+    const updateFoot = () => {
+      const n = chosen.size;
+      count.textContent = n ? `${n} selected` : "Nothing selected";
+      addBtn.disabled = !n;
+      addBtn.textContent = n ? `Add ${n} printer${n > 1 ? "s" : ""}` : "Add printers";
+      $$(".pp-vendor", vendorList).forEach((el) => {
+        const v = el.dataset.vendor;
+        const k = [...chosen.values()].filter((x) => cat.printers.find((p) => p.key === x.preset)?.vendor === v).length;
+        $(".pp-vsel", el).textContent = k ? String(k) : "";
+      });
+    };
+
+    const renderVendors = () => {
+      vendorList.innerHTML = "";
+      for (const v of cat.vendors) {
+        vendorList.append(h("button", { class: `pp-vendor ${v.name === vendor && !search.value ? "on" : ""}`, role: "option", "aria-selected": v.name === vendor, "data-vendor": v.name, onclick: () => { vendor = v.name; search.value = ""; renderVendors(); renderGrid(); grid.scrollTop = 0; } },
+          h("span", {}, v.name), h("span", { class: "pp-vsel" }), h("span", { class: "pp-vn" }, v.count)));
+      }
+      updateFoot();
+    };
+
+    const renderGrid = () => {
+      grid.innerHTML = "";
+      const q = search.value.trim().toLowerCase();
+      const list = q
+        ? cat.printers.filter((p) => `${p.vendor} ${p.model}`.toLowerCase().includes(q)).slice(0, 120)
+        : cat.printers.filter((p) => p.vendor === vendor);
+      if (!list.length) { grid.append(h("div", { class: "empty", style: "grid-column:1/-1" }, h("h3", {}, "No printers match"), "Try a shorter search, or add a custom printer in Settings.")); return; }
+      for (const p of list) {
+        const nozzles = h("div", { class: "pp-nozzles", role: "group", "aria-label": `Nozzle sizes for ${p.display}` });
+        for (const nz of p.nozzles) {
+          const prof = profileFromCatalog(p, nz);
+          const added = existing.has(prof.id);
+          const on = added || chosen.has(prof.id);
+          const b = h("button", { class: `pp-nz ${on ? "on" : ""} ${added ? "added" : ""}`, "aria-pressed": on, disabled: added, title: added ? "Already added" : `${p.display} with a ${nz} mm nozzle` }, `${+nz} mm`);
+          b.addEventListener("click", () => {
+            if (chosen.has(prof.id)) chosen.delete(prof.id); else chosen.set(prof.id, prof);
+            const now = chosen.has(prof.id);
+            b.classList.toggle("on", now); b.setAttribute("aria-pressed", now);
+            card.classList.toggle("picked", [...chosen.values()].some((x) => x.preset === p.key));
+            updateFoot();
+          });
+          nozzles.append(b);
+        }
+        const dims = p.shape === "round" ? `Round ${+p.bed_x} mm, ${+p.bed_z} mm tall` : `${+p.bed_x} x ${+p.bed_y} x ${+p.bed_z} mm`;
+        const card = h("div", { class: `pp-card ${[...chosen.values()].some((x) => x.preset === p.key) ? "picked" : ""}` },
+          h("div", { class: "pp-art", html: bedSketch(p) }),
+          h("div", { class: "pp-name" }, q ? p.display : p.model),
+          h("div", { class: "pp-dims tabular" }, dims),
+          nozzles);
+        grid.append(card);
+      }
+    };
+
+    const close = (result) => { dialog.close(); dialog.remove(); resolve(result); };
+    search.addEventListener("input", debounce(() => { renderVendors(); renderGrid(); }, 150));
+    cancelBtn.addEventListener("click", () => close([]));
+    addBtn.addEventListener("click", () => close([...chosen.values()]));
+    dialog.addEventListener("cancel", (e) => { e.preventDefault(); close([]); });
+    renderVendors();
+    renderGrid();
+    dialog.showModal();
+    $(".pp-vendor.on", vendorList)?.scrollIntoView({ block: "center" });
+    search.focus();
+  });
 }
 
 // ================================================================= DOCS
