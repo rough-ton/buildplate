@@ -53,11 +53,18 @@ def detect() -> dict[str, Any]:
     if not exe:
         return info
     try:
-        ver = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=20)
-        info["version"] = (ver.stdout + ver.stderr).strip().replace("OpenSCAD version ", "")
-        helptext = subprocess.run([exe, "--help"], capture_output=True, text=True, timeout=20)
+        ver = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=20, env=_env())
+        out = (ver.stdout + ver.stderr).strip()
+        m = re.search(r"OpenSCAD version (\S+)", out)
+        if ver.returncode != 0 or not m:
+            info["available"] = False
+            info["error"] = (out.splitlines() or ["OpenSCAD did not start"])[-1][:300]
+            return info
+        info["version"] = m.group(1)
+        helptext = subprocess.run([exe, "--help"], capture_output=True, text=True, timeout=20, env=_env())
         h = helptext.stdout + helptext.stderr
     except Exception as exc:  # pragma: no cover
+        info["available"] = False
         info["error"] = str(exc)
         return info
     if "--backend" in h:
@@ -84,9 +91,16 @@ def list_libraries() -> list[dict[str, str]]:
 
 
 def _env() -> dict[str, str]:
+    """Environment for OpenSCAD. HOME and XDG_CONFIG_HOME always point at a writable
+    folder in the data directory: the container runs as an unprivileged user, and
+    OpenSCAD aborts at startup if it cannot read or create its config folder."""
+    home = config.DATA_DIR / ".home"
+    (home / ".config").mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
+    env["HOME"] = str(home)
+    env["XDG_CONFIG_HOME"] = str(home / ".config")
+    env["XDG_CACHE_HOME"] = str(home / ".cache")
     env["OPENSCADPATH"] = os.pathsep.join(str(d) for d in library_dirs())
-    env.setdefault("HOME", str(config.DATA_DIR))
     return env
 
 

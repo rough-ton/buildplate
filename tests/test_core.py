@@ -160,3 +160,10 @@ def test_round_bed_check(sf):
     _, bad = asyncio.run(osc.validate("translate([-80, -80, 0]) cube([160, 160, 10]);"))
     assert not ok["issues"]
     assert any("round bed" in i for i in bad["issues"])
+
+
+def test_openscad_env_uses_writable_home(sf, monkeypatch):
+    monkeypatch.setenv("HOME", "/root")
+    env = sf["openscad"]._env()
+    assert env["HOME"].startswith(str(sf["config"].DATA_DIR))
+    assert env["XDG_CONFIG_HOME"].startswith(env["HOME"])

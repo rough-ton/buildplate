@@ -76,6 +76,15 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Smoke test the published image
         run: |
-          docker run -d --name smoke -p 8080:8080 ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/api/health && exit 0; sleep 2; done
-          docker logs smoke; exit 1
+          # Run as an unprivileged user, the way Unraid (99:100) and most installs do.
+          docker run -d --name smoke -p 8080:8080 -e PUID=99 -e PGID=100 ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/api/health >/dev/null && break; sleep 2; done
+          set -e
+          curl -fsS http://127.0.0.1:8080/api/system | python3 -c "import json,sys; o=json.load(sys.stdin)['openscad']; print(o); assert o['available'], o"
+          curl -fsS -X POST http://127.0.0.1:8080/api/render -H 'content-type: application/json' \
+            -d '{"code":"cube([20,10,5]);"}' | python3 -c "import json,sys; r=json.load(sys.stdin); print(r['stats']); assert r['stats']['watertight']"
+          curl -fsS -X POST http://127.0.0.1:8080/api/render -H 'content-type: application/json' \
+            -d '{"code":"include <BOSL2/std.scad>\ncuboid([20,20,10], rounding=2, anchor=BOT);","format":"png"}'
+      - name: Container logs
+        if: failure()
+        run: docker logs smoke || true
