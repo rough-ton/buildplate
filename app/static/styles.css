@@ -353,3 +353,15 @@ table.data .prompt { max-width: 340px; overflow: hidden; text-overflow: ellipsis
   .provider-body { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- printers ---------- */
+.printer-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.pcard { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--sunken); cursor: pointer; }
+.pcard:hover { border-color: var(--line-strong); }
+.pcard.on { border-color: var(--accent); background: var(--accent-soft); }
+.pcard-name { font-weight: 600; display: flex; align-items: center; }
+.pcard-dims { color: var(--ink-2); font-size: 12.5px; }
+.printer-editor { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.printer-add { margin-top: 14px; }
+.printer-add select { width: auto; min-width: 220px; }
+.printer-select { width: auto; height: 28px; font-size: 12.5px; padding: 0 8px; max-width: 280px; background: var(--panel); }

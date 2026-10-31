@@ -76,6 +76,12 @@ The **Checks** tab shows the size, volume, an estimated PLA weight, whether the 
 
 Every generation and every saved edit is a version. Open one from the **History** tab to load its code and model. Saving after that creates a new version; nothing is overwritten.
 
+## Choosing the printer
+
+The menu at the top right of the viewer selects the target printer. Switching redraws the build plate at that printer's size, re-runs the checks on the current part, and makes the agent design to that printer's build volume, nozzle and clearance from the next request on. Choose **Manage printers...** to add or edit profiles.
+
+Each version records the printer it was checked against, shown in the **History** and **Checks** tabs.
+
 ## Viewer controls
 
 - Drag to orbit, right-drag or Shift+drag to pan, scroll to zoom.

@@ -345,6 +345,7 @@ def mesh_stats(stl_path: Path) -> dict[str, Any]:
     if 0 < min_dim < s["nozzle"] * 2:
         issues.append(f"Thinnest overall dimension ({min_dim:.2f} mm) is under two nozzle widths.")
     stats["issues"] = issues
+    stats["printer"] = s["name"]
     if stats["volume_mm3"]:
         stats["est_filament_g_pla"] = round(stats["volume_mm3"] / 1000 * 1.24, 1)
     return stats
