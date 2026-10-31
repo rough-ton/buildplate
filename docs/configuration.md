@@ -34,6 +34,8 @@ Save one profile per printer and nozzle size. One profile is active at a time; s
 
 **Add printers** opens the printer catalog: pick a manufacturer on the left (or search), then select the nozzle sizes you use on each printer. Each selection becomes a profile named like "Bambu Lab P1S 0.4 nozzle", with the printer's build volume, bed shape and sensible defaults for that nozzle. **Add custom printer** creates a blank profile for anything not in the catalog.
 
+Each printer is shown with an illustration of its machine style. Catalog printers get their style automatically from their model; change it in the profile editor if it is wrong for your machine. Printers the catalog cannot classify use the generic illustration.
+
 The catalog lists over 400 printers from about 70 manufacturers. It is generated from OrcaSlicer's printer profiles, so build volumes are the slicer's usable printable area, which can be a few millimetres smaller than the marketing figure.
 
 | Field | Default | Used for |
@@ -45,6 +47,7 @@ The catalog lists over 400 printers from about 70 manufacturers. It is generated
 | Fit clearance | 0.25 mm | Gap between mating parts |
 | Max overhang | 45 degrees | Design guidance |
 | Bed shape | Rectangular | Round for delta printers; Bed X is then the diameter |
+| Printer type | From catalog | Machine style shown in the illustration: bed slinger, cantilever, open CoreXY, enclosed CoreXY, delta or generic |
 
 At least one profile must exist. Settings from earlier versions with a single printer are converted to a profile automatically.
 

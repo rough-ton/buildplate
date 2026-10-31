@@ -30,6 +30,20 @@
   --shadow: 0 1px 2px rgba(28, 36, 48, .06), 0 4px 16px rgba(28, 36, 48, .05);
   --sans: "Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --pi-frame: #303A46;
+  --pi-frame2: #47525F;
+  --pi-rail: #8B96A3;
+  --pi-top: #E9EDF1;
+  --pi-face: #D4DBE2;
+  --pi-side: #B7C0CA;
+  --pi-glass: #9CC0D6;
+  --pi-plate: #0E8C7A;
+  --pi-plate-edge: #0A6B5D;
+  --pi-plate-side: #095A4E;
+  --pi-screen: #6FA3D6;
+  --pi-spool: #3C6E9E;
+  --pi-nozzle: #C9A227;
+  --pi-bg: var(--sunken);
   color-scheme: light;
 }
 
@@ -56,6 +70,19 @@
     --grid-minor: #252C35;
     --part: #6FA3D6;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+    --pi-frame: #0F1318;
+    --pi-frame2: #2A323C;
+    --pi-rail: #6E7A87;
+    --pi-top: #5A6673;
+    --pi-face: #46515D;
+    --pi-side: #353F4A;
+    --pi-glass: #7FA9C4;
+    --pi-plate: #2BB39E;
+    --pi-plate-edge: #1E8C7B;
+    --pi-plate-side: #17705F;
+    --pi-screen: #6FA3D6;
+    --pi-spool: #6FA3D6;
+    --pi-nozzle: #D9B23C;
     color-scheme: dark;
   }
 }
@@ -356,10 +383,15 @@ table.data .prompt { max-width: 340px; overflow: hidden; text-overflow: ellipsis
 
 /* ---------- printers ---------- */
 .printer-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 18px; }
-.pcard { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--sunken); cursor: pointer; }
+.pcard { display: flex; flex-direction: row; align-items: center; gap: 12px; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--sunken); cursor: pointer; }
 .pcard:hover { border-color: var(--line-strong); }
 .pcard.on { border-color: var(--accent); background: var(--accent-soft); }
-.pcard-name { font-weight: 600; display: flex; align-items: center; }
+.pcard-name { font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; }
+.pcard-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pcard-icon { --pi-bg: var(--sunken); flex: none; width: 52px; }
+.pcard.on .pcard-icon { --pi-bg: var(--accent-soft); }
+.pcard-icon .printer-icon, .printer-chip-icon .printer-icon { width: 100%; height: auto; display: block; }
+.printer-chip-icon { --pi-bg: var(--viewer-bg); width: 34px; flex: none; }
 .pcard-dims { color: var(--ink-2); font-size: 12.5px; }
 .printer-editor { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
 .printer-add { margin-top: 14px; }
@@ -385,8 +417,11 @@ dialog.pp::backdrop { background: rgba(19, 24, 30, .45); }
 .pp-grid { overflow: auto; padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; align-content: start; }
 .pp-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 4px; background: var(--panel); }
 .pp-card.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.pp-art { height: 72px; display: grid; place-items: center; margin-bottom: 6px; background: var(--viewer-bg); border-radius: var(--radius-sm); }
-.bed-sketch { width: 64px; height: 64px; }
+.pp-art { --pi-bg: var(--sunken); position: relative; height: 112px; display: grid; place-items: center; margin-bottom: 6px; background: var(--sunken); border-radius: var(--radius-sm); }
+.pp-illo .printer-icon { width: 120px; height: 93px; display: block; }
+.pp-bed { position: absolute; right: 6px; bottom: 6px; width: 30px; height: 30px; }
+.pp-bed .bed-sketch { width: 30px; height: 30px; }
+.bed-sketch { width: 64px; height: 64px; display: block; }
 .bed-sketch .bed { fill: var(--panel); stroke: var(--grid-major); stroke-width: 1.2; }
 .bed-sketch .grid line { stroke: var(--grid-minor); stroke-width: .8; }
 .pp-card.picked .bed-sketch .bed { stroke: var(--accent); }
@@ -408,5 +443,7 @@ dialog.pp::backdrop { background: rgba(19, 24, 30, .45); }
   .pp-head input { width: 100%; }
   .pp-foot .hint { display: none; }
   .pp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px; gap: 8px; }
-  .pp-art { height: 56px; }
+  .pp-art { height: 92px; }
+  .pp-illo .printer-icon { width: 96px; height: 74px; }
 }
+.printer-chip { display: inline-flex; align-items: center; gap: 8px; }

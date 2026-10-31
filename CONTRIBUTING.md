@@ -77,4 +77,6 @@ git -C /tmp/orca sparse-checkout set resources/profiles
 python3 tools/build_printer_db.py /tmp/orca
 ```
 
+Machine styles for the illustrations are assigned in `tools/printer_types.py`: explicit rules per manufacturer and model first, then OrcaSlicer's `printer_structure` field, then name hints. Add a rule there when a new printer shows the generic illustration.
+
 The workflow needs **Settings > Actions > General > Allow GitHub Actions to create and approve pull requests** turned on.

@@ -106,6 +106,7 @@ DEFAULT_PRINTER: dict[str, Any] = {
     "id": "default",
     "name": "My printer",
     "shape": "rect",
+    "type": "generic",
     "bed_x": 256,
     "bed_y": 256,
     "bed_z": 256,
@@ -114,6 +115,7 @@ DEFAULT_PRINTER: dict[str, Any] = {
     "clearance": 0.25,
     "max_overhang": 45,
 }
+PRINTER_TYPES = ("bedslinger", "cantilever", "corexy_open", "corexy_enclosed", "delta", "generic")
 PRINTER_FIELDS = ("bed_x", "bed_y", "bed_z", "nozzle", "layer_height", "clearance", "max_overhang")
 
 
@@ -127,11 +129,37 @@ def _migrate_printers(s: dict[str, Any]) -> bool:
             base.update({k: v for k, v in legacy.items() if k in PRINTER_FIELDS or k == "name"})
         s["printers"] = [base]
         changed = True
+    for p in s["printers"]:
+        if p.get("type") not in PRINTER_TYPES:
+            p["type"] = _infer_type(p)
+            changed = True
     ids = [p["id"] for p in s["printers"]]
     if s.get("active_printer") not in ids:
         s["active_printer"] = ids[0]
         changed = True
     return changed or legacy is not None
+
+
+def _infer_type(p: dict[str, Any]) -> str:
+    """Best guess for profiles saved before printer types existed."""
+    if p.get("shape") == "round":
+        return "delta"
+    try:
+        from . import printers as catalog
+
+        if p.get("preset") and catalog.find(p["preset"]):
+            return catalog.find(p["preset"])["type"]
+        name = str(p.get("name", "")).lower()
+        best = None
+        for c in catalog.catalog()["printers"]:
+            disp = c["display"].lower()
+            if name.startswith(disp) and (best is None or len(disp) > len(best["display"])):
+                best = c
+        if best:
+            return best["type"]
+    except Exception:
+        pass
+    return "generic"
 
 
 def active_printer(s: dict[str, Any]) -> dict[str, Any]:
@@ -342,6 +370,8 @@ def _validate_printers(s: dict[str, Any]) -> None:
         if p.get("preset"):
             out["preset"] = str(p["preset"])[:80]
         out["shape"] = "round" if p.get("shape") == "round" else "rect"
+        kind = p.get("type")
+        out["type"] = kind if kind in PRINTER_TYPES else _infer_type(out)
         clean.append(out)
     s["printers"] = clean
     if s.get("active_printer") not in seen:
