@@ -104,6 +104,12 @@ export class Viewer {
     const geo = await this.loader.loadAsync(url);
     geo.computeVertexNormals();
     geo.computeBoundingBox();
+    // Center the footprint on the bed and rest the part on the plate, like a slicer.
+    // Only the preview moves; downloads keep the design's own coordinates.
+    const bb = geo.boundingBox;
+    const c = bb.getCenter(new THREE.Vector3());
+    geo.translate(-c.x, -c.y, -bb.min.z);
+    geo.computeBoundingBox();
     if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); }
     if (this.edges) { this.scene.remove(this.edges); this.edges.geometry.dispose(); this.edges = null; }
     const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(css("--part") || "#3C6E9E"), roughness: 0.55, metalness: 0.05, flatShading: false, wireframe: this.wire });
