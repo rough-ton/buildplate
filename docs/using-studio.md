@@ -88,7 +88,7 @@ Each version records the printer it was checked against, shown in the **History*
 - **Iso**, **Front**, **Right** and **Top** frame the part from that side.
 - **Wireframe** shows the mesh triangles.
 
-The grid matches your printer profile, with fine lines every 10 mm and bold lines every 50 mm. Delta printers get a round plate. The red and green lines mark the X and Y axes at the origin.
+The grid matches your printer profile, with fine lines every 10 mm and bold lines every 50 mm. Delta printers get a round plate. The red and green lines mark the X and Y directions at the center of the plate. Parts are shown centered on the plate and resting on its surface, the way a slicer places them, so a design does not need `center=true` to preview well. Downloads keep the design's own OpenSCAD coordinates.
 
 ## Exporting
 
