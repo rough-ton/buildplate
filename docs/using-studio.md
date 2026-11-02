@@ -95,5 +95,7 @@ The grid matches your printer profile, with fine lines every 10 mm and bold line
 The buttons at the bottom of the inspector download:
 
 - **STL** for any slicer.
-- **3MF** for slicers that prefer it, such as Bambu Studio, OrcaSlicer and PrusaSlicer.
+- **3MF** for slicers that prefer it, such as Bambu Studio, OrcaSlicer and PrusaSlicer. Each separate body in the design becomes its own object (`part-1`, `part-2`, and so on, largest first), so a mount and its name plate import as two objects you can arrange or color independently. An STL is always a single mesh; use 3MF when a design has more than one part.
+
+  Bambu Studio and OrcaSlicer show "The 3mf file has invalid config, load geometry data only" for any 3MF that was not saved by Bambu Studio. That is expected: the file carries geometry only, and the slicer applies your current printer, filament and process presets.
 - **SCAD** to keep editing in OpenSCAD itself.

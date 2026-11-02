@@ -167,3 +167,36 @@ def test_openscad_env_uses_writable_home(sf, monkeypatch):
     env = sf["openscad"]._env()
     assert env["HOME"].startswith(str(sf["config"].DATA_DIR))
     assert env["XDG_CONFIG_HOME"].startswith(env["HOME"])
+
+
+def test_3mf_splits_bodies_into_objects(sf):
+    import zipfile
+
+    from lxml import etree
+
+    osc = sf["openscad"]
+    code = (
+        "cube([20, 20, 5]);\n"
+        "translate([40, 0, 0]) cube([10, 10, 5]);\n"
+        # hollow cube: the internal void must stay part of its body
+        "translate([0, 40, 0]) difference() { cube(20); translate([5, 5, 5]) cube(10); }\n"
+    )
+    p = asyncio.run(osc.export_3mf(code))
+    with zipfile.ZipFile(p) as z:
+        model = next(n for n in z.namelist() if n.endswith(".model"))
+        root = etree.fromstring(z.read(model))
+    ns = {"m": root.nsmap.get(None)}
+    meshes = root.findall(".//m:object/m:mesh", ns)
+    items = root.findall(".//m:build/m:item", ns)
+    assert len(meshes) == 3
+    assert len(items) == 3
+
+
+def test_3mf_single_body_is_one_object(sf):
+    import zipfile
+
+    osc = sf["openscad"]
+    p = asyncio.run(osc.export_3mf("cube(10);"))
+    with zipfile.ZipFile(p) as z:
+        model = next(n for n in z.namelist() if n.endswith(".model"))
+        assert z.read(model).count(b"<mesh") == 1

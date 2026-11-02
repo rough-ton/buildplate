@@ -382,15 +382,59 @@ async def validate(code: str, params: dict[str, Any] | None = None) -> tuple[Ren
     return res, stats
 
 
-async def export_3mf(code: str, params: dict[str, Any] | None = None) -> Path:
-    try:
-        return (await render(code, "3mf", params)).path
-    except RenderError:
-        import trimesh
+def split_bodies(mesh):
+    """Split a mesh into separate printable bodies.
 
-        stl = (await render(code, "stl", params)).path
-        out = stl.with_suffix(".3mf")
-        if not out.exists():
-            mesh = trimesh.load(str(stl), force="mesh")
-            mesh.export(str(out), file_type="3mf")
+    Connected components are split apart, but the inward-facing shell of an
+    internal void stays with the body that encloses it, so a hollow part is
+    still one object.
+    """
+    import trimesh
+
+    parts = mesh.split(only_watertight=False)
+    if len(parts) <= 1:
+        return [mesh]
+    solids, voids = [], []
+    for p in parts:
+        (voids if p.is_watertight and p.volume < 0 else solids).append(p)
+    if not solids:
+        return [mesh]
+    groups = [[s] for s in solids]
+    for v in voids:
+        vmin, vmax = v.bounds
+        home = None
+        for g in groups:
+            smin, smax = g[0].bounds
+            if (smin <= vmin).all() and (smax >= vmax).all():
+                if home is None or g[0].volume < home[0].volume:
+                    home = g
+        (home or groups[0]).append(v)
+    bodies = [trimesh.util.concatenate(g) if len(g) > 1 else g[0] for g in groups]
+    # Largest first, so the main part is "part-1" in the slicer.
+    bodies.sort(key=lambda b: abs(b.volume), reverse=True)
+    return bodies
+
+
+async def export_3mf(code: str, params: dict[str, Any] | None = None) -> Path:
+    """Export a 3MF with one object per separate body.
+
+    OpenSCAD writes every top-level shape as a single object, so slicers such as
+    Bambu Studio import a multi-part design as one object. Splitting the mesh
+    here gives each part its own object, ready to arrange or color separately.
+    """
+    import trimesh
+
+    stl = (await render(code, "stl", params)).path
+    # Own cache key, so 3MF files cached by older versions (one object) are not reused.
+    key = hashlib.sha256(f"{stl.stem}:split-bodies-v1".encode()).hexdigest()[:24]
+    out = stl.with_name(f"{key}.3mf")
+    if out.exists() and out.stat().st_size > 0:
         return out
+    mesh = trimesh.load(str(stl), force="mesh")
+    scene = trimesh.Scene()
+    for i, body in enumerate(split_bodies(mesh), start=1):
+        scene.add_geometry(body, node_name=f"part-{i}", geom_name=f"part-{i}")
+    tmp = out.with_name(out.stem + ".tmp.3mf")
+    scene.export(str(tmp), file_type="3mf")
+    tmp.replace(out)
+    return out
