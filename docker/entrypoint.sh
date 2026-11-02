@@ -6,18 +6,21 @@ set -e
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
 
-mkdir -p /data/libraries /data/cache /data/designs /data/.home/.config
-
 # The app runs as PUID:PGID, so HOME must be somewhere that user can write.
 # OpenSCAD reads its config from $HOME/.config and aborts if it cannot.
 export HOME=/data/.home
 export XDG_CONFIG_HOME=/data/.home/.config
 
+DIRS="/data/libraries /data/cache /data/designs /data/.home/.config"
+
 if [ "$(id -u)" = "0" ]; then
-  if [ "$(stat -c %u /data)" != "$PUID" ] || [ "$(stat -c %g /data)" != "$PGID" ]; then
-    chown -R "$PUID:$PGID" /data
-  fi
+  mkdir -p $DIRS
+  # Fix ownership of anything under /data that the app user does not own,
+  # including folders just created above. Checking only the top of /data misses
+  # subfolders created as root when /data itself is already owned correctly.
+  find /data \( ! -user "$PUID" -o ! -group "$PGID" \) -exec chown -h "$PUID:$PGID" {} +
   exec setpriv --reuid="$PUID" --regid="$PGID" --clear-groups "$@"
 fi
 
+mkdir -p $DIRS
 exec "$@"
