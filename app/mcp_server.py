@@ -90,10 +90,18 @@ async def save_design(
     return {"design_id": design_id, "version": version, "tags": out_tags, "stats": stats, "downloads": _links(design_id, version)}
 
 
-@mcp.tool(description="Run Buildplate's built-in design agent on a natural-language request using its configured AI model. Token usage is tracked in Buildplate. Pass design_id to modify an existing design.")
-async def generate_design(prompt: str, design_id: str | None = None) -> dict[str, Any]:
+@mcp.tool(
+    description=(
+        "Run Buildplate's built-in design agent on a natural-language request. Uses the design agent's default "
+        "AI connection and model unless connection (an id from environment) and model are given. Token usage "
+        "is tracked in Buildplate. Pass design_id to modify an existing design."
+    )
+)
+async def generate_design(
+    prompt: str, design_id: str | None = None, connection: str | None = None, model: str | None = None
+) -> dict[str, Any]:
     done: dict[str, Any] | None = None
-    async for ev in agent.run(prompt, design_id=design_id, source="mcp"):
+    async for ev in agent.run(prompt, design_id=design_id, source="mcp", connection=connection, model=model):
         if ev["type"] == "done":
             done = ev
         elif ev["type"] == "error":
@@ -191,10 +199,16 @@ async def get_parameters(code: str) -> list[dict[str, Any]]:
     return openscad.parse_parameters(code)
 
 
-@mcp.tool(description="Describe the active printer profile, all saved printer profiles, and available OpenSCAD libraries.")
+@mcp.tool(description="Describe the active printer profile, all saved printer profiles, the AI connections and models generate_design can use, and available OpenSCAD libraries.")
 async def environment() -> dict[str, Any]:
     s = store.get()
     return {
+        "ai_connections": [
+            {"id": c["id"], "label": c["label"], "method": c["method"], "enabled": c["enabled"], "models": c["models"][:50]}
+            for c in s["connections"]
+        ],
+        "default_connection": s["agent"]["connection"],
+        "default_model": s["agent"]["model"],
         "active_printer": s["printer"],
         "printers": [{"id": p["id"], "name": p["name"]} for p in s["printers"]],
         "libraries": openscad.list_libraries(),

@@ -7,20 +7,26 @@ Buildplate has two kinds of configuration:
 
 ## Settings
 
-### AI providers
+### AI connections
+
+Each connection is one way to reach a model. See [AI connections](./providers.md).
 
 | Setting | Description |
 | --- | --- |
-| Enabled | Whether the provider's models are offered |
+| Name | Shown in model pickers and on usage records |
+| Method | The provider and how it is reached, such as Claude API key or Ollama |
+| Enabled | Whether the connection's models are offered |
 | API key | Stored encrypted. Never returned to the browser |
 | Base URL | For Ollama and OpenAI-compatible servers |
 | Models | Filled in when you test the connection |
+
+Adding or changing connections needs a signed-in password session, or a request from the server itself.
 
 ### Design agent
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| Default model | none | Provider and model used when a request does not pick one |
+| Default model | none | Connection and model used when a request does not pick one |
 | Max steps | 6 | Model calls allowed per request (1 to 25) |
 | Temperature | 0.2 | Lower is more consistent; higher is more varied |
 | Max output tokens | 8192 | Upper limit for each model response |
@@ -70,7 +76,7 @@ At least one profile must exist. Settings from earlier versions with a single pr
 
 ### Pricing overrides
 
-Per-model prices in US dollars per million input and output tokens, keyed `provider/model`. Used instead of the built-in price list.
+Per-model prices in US dollars per million input and output tokens, keyed `provider/model`, where provider is the provider family (`anthropic`, `openai`, `ollama` and so on), whichever connection is used. Used instead of the built-in price list.
 
 ## Environment variables
 
@@ -84,13 +90,16 @@ Per-model prices in US dollars per million input and output tokens, keyed `provi
 | `BUILDPLATE_SECRET_KEY` | generated | Key used to encrypt secrets. If unset, one is generated and stored in `/data/.secret` |
 | `BUILDPLATE_ADMIN_PASSWORD` | none | Sets the web UI password on first start, if none is set |
 | `BUILDPLATE_MCP_TOKEN` | none | Sets the MCP token on first start, if none is set |
-| `ANTHROPIC_API_KEY` | none | Seeds the Anthropic key on first start |
-| `OPENAI_API_KEY` | none | Seeds the OpenAI key on first start |
-| `GEMINI_API_KEY` | none | Seeds the Gemini key on first start |
-| `OPENROUTER_API_KEY` | none | Seeds the OpenRouter key on first start |
-| `OLLAMA_BASE_URL` | none | Seeds and enables the Ollama provider on first start |
+| `ANTHROPIC_API_KEY` | none | Adds a Claude API key connection |
+| `OPENAI_API_KEY` | none | Adds an OpenAI API key connection |
+| `GEMINI_API_KEY` | none | Adds a Gemini API key connection |
+| `OPENROUTER_API_KEY` | none | Adds an OpenRouter API key connection |
+| `XAI_API_KEY`, `MISTRAL_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY` | none | Add a connection for that provider |
+| `OLLAMA_BASE_URL` | none | Adds an Ollama connection |
 
-Seeded values are copied into settings once and can then be changed in the UI. Changing the environment variable later does not overwrite a value already saved.
+A variable adds its connection only when no connection of that method exists yet. It can then be changed in the UI; changing the environment variable later does not overwrite it. If you remove the connection while the variable is still set, it is added again on the next start.
+
+Settings files from before connections existed are converted automatically on first start: every provider with a saved key, or that was turned on, becomes a connection, and the default model keeps pointing at it. For one release, `GET /api/settings` still includes the old `providers` object (read-only) and `agent.provider`.
 
 ## Data folder layout
 
@@ -104,4 +113,4 @@ Seeded values are copied into settings once and can then be changed in the UI. C
 └── libraries/         your own OpenSCAD libraries
 ```
 
-If you lose `.secret`, saved API keys and the MCP token cannot be decrypted. Enter them again in Settings.
+If you lose `.secret`, saved connection credentials and the MCP token cannot be decrypted. Enter them again in Settings.

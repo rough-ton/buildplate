@@ -104,38 +104,35 @@ function madeBy(v) {
   return { label: "Manual edit", title: "Code written or edited by hand", kind: "manual" };
 }
 
+const BILLING_LABELS = { api: "Pay per use", subscription: "Uses your plan", cloud: "Cloud account", local: "Local" };
+function connectionById(id) { return (app.settings?.connections || []).find((c) => c.id === id); }
+
 function renderModelChip() {
   const chip = $("#model-chip");
   const a = app.settings?.agent || {};
-  if (a.provider && a.model) {
+  const conn = connectionById(a.connection);
+  if (conn && a.model) {
     chip.className = "model-chip";
-    chip.innerHTML = `<strong>${esc(a.model)}</strong>${esc(providerLabel(a.provider).split(" (")[0])}`;
+    chip.innerHTML = `<strong>${esc(a.model)}</strong>${esc(conn.label)}`;
   } else {
     chip.className = "model-chip missing";
     chip.innerHTML = `<strong>No model selected</strong><a href="#/settings">Choose one in Settings</a>`;
   }
 }
 
-function modelOptions(selectedProvider, selectedModel) {
-  const opts = [];
-  for (const [pid, p] of Object.entries(app.settings?.providers || {})) {
-    if (!p.enabled) continue;
-    const models = new Set(p.models || []);
-    if (pid === selectedProvider && selectedModel) models.add(selectedModel);
-    for (const m of models) opts.push({ value: `${pid}::${m}`, label: `${m}`, group: p.meta.label, selected: pid === selectedProvider && m === selectedModel });
-  }
-  return opts;
-}
-
+// Picker values are "<connection id>::<model>", grouped by connection.
 function modelSelect(attrs = {}) {
   const a = app.settings.agent;
   const sel = h("select", attrs);
-  const groups = {};
-  for (const o of modelOptions(a.provider, a.model)) {
-    groups[o.group] ||= h("optgroup", { label: o.group });
-    groups[o.group].append(h("option", { value: o.value, selected: o.selected }, o.label));
+  for (const c of app.settings?.connections || []) {
+    if (!c.enabled) continue;
+    const models = new Set(c.models || []);
+    if (c.id === a.connection && a.model) models.add(a.model);
+    if (!models.size) continue;
+    const group = h("optgroup", { label: `${c.label} (${BILLING_LABELS[c.billing] || c.billing})` });
+    for (const m of models) group.append(h("option", { value: `${c.id}::${m}`, selected: c.id === a.connection && m === a.model }, m));
+    sel.append(group);
   }
-  Object.values(groups).forEach((g) => sel.append(g));
   if (!sel.options.length) sel.append(h("option", { value: "" }, "No models configured"));
   return sel;
 }
@@ -607,8 +604,8 @@ async function Studio(root, [designId]) {
   async function generate() {
     const text = prompt.value.trim();
     if (!text || s.running) return;
-    const [provider, model] = (picker.value || "").split("::");
-    if (!provider) { toast("Add an AI provider and pick a model in Settings first.", "bad"); return; }
+    const [connection, model] = (picker.value || "").split("::");
+    if (!connection) { toast("Add an AI connection and pick a model in Settings first.", "bad"); return; }
     addUser(text);
     prompt.value = "";
     s.running = true;
@@ -624,7 +621,7 @@ async function Studio(root, [designId]) {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, design_id: s.designId, code: s.code && s.code !== s.savedCode ? s.code : null, provider, model }),
+        body: JSON.stringify({ prompt: text, design_id: s.designId, code: s.code && s.code !== s.savedCode ? s.code : null, connection, model }),
         signal: s.abort.signal,
       });
       if (res.status === 401) { showLogin(); return; }
@@ -1080,66 +1077,172 @@ async function Settings(root) {
 
   page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Settings"), h("p", {}, "Changes apply immediately. Nothing needs a restart or rebuild."))));
   const toc = h("nav", { class: "toc", "aria-label": "Settings sections" },
-    ...[["providers", "AI providers"], ["agent", "Design agent"], ["printer", "Printers"], ["render", "Rendering"], ["access", "Access and MCP"], ["pricing", "Pricing"], ["system", "System"]].map(([id, l]) => h("a", { href: `#/settings`, onclick: (e) => { e.preventDefault(); $(`#sec-${id}`).scrollIntoView({ behavior: "smooth", block: "start" }); } }, l)));
+    ...[["connections", "AI connections"], ["agent", "Design agent"], ["printer", "Printers"], ["render", "Rendering"], ["access", "Access and MCP"], ["pricing", "Pricing"], ["system", "System"]].map(([id, l]) => h("a", { href: `#/settings`, onclick: (e) => { e.preventDefault(); $(`#sec-${id}`).scrollIntoView({ behavior: "smooth", block: "start" }); } }, l)));
   const body = h("div", {});
   page.append(h("div", { class: "settings-layout" }, toc, body));
   root.append(page);
 
   const section = (id, title, desc, ...content) => h("section", { class: "section", id: `sec-${id}` }, h("div", { class: "section-head" }, h("h2", {}, title), desc ? h("p", {}, desc) : null), h("div", { class: "section-body" }, ...content));
 
-  // ---- providers (saved individually, since connecting needs a live test)
-  const provWrap = h("div", {});
-  function renderProviders() {
-    provWrap.innerHTML = "";
-    for (const [pid, p] of Object.entries(app.settings.providers)) {
-      const meta = p.meta;
-      const enabled = h("input", { type: "checkbox", checked: p.enabled, "aria-label": `Enable ${meta.label}` });
-      const keyInput = meta.needs_key || pid === "openai_compatible"
-        ? h("input", { type: "password", placeholder: p.api_key_set ? `Saved key ${p.api_key_hint}. Enter a new one to replace it.` : meta.needs_key ? "Paste your API key" : "Optional API key", autocomplete: "off", id: `k-${pid}` })
-        : null;
-      const urlInput = meta.needs_base_url ? h("input", { type: "url", value: p.base_url, id: `u-${pid}` }) : null;
-      const testBtn = h("button", { class: "btn" }, p.api_key_set || !meta.needs_key ? "Test and load models" : "Connect");
-      const status = h("span", { class: "hint", style: "margin:0" }, p.models?.length ? `${p.models.length} models available` : "");
-      const box = h("div", { class: `provider ${p.enabled ? "on" : ""}` },
-        h("div", { class: "provider-head" },
-          h("label", { class: "switch" }, enabled),
-          h("h3", {}, meta.label),
-          p.api_key_set ? h("span", { class: "pill good" }, "Key saved") : null,
-          pid === app.settings.agent.provider ? h("span", { class: "pill accent" }, "Active") : null,
-          h("span", { class: "spacer" }),
-          meta.key_url ? h("a", { href: meta.key_url, target: "_blank", rel: "noopener", class: "hint", style: "margin:0" }, "Get a key") : null),
-        h("div", { class: "provider-body" },
-          urlInput ? h("div", { class: "full" }, h("label", { for: urlInput.id }, "Base URL"), urlInput, h("p", { class: "hint" }, pid === "ollama" ? "Where Ollama listens. From inside Docker, use your host's LAN IP or host.docker.internal." : "The server's OpenAI-compatible /v1 endpoint.")) : null,
-          keyInput ? h("div", {}, h("label", { for: keyInput.id }, "API key"), keyInput) : h("div", {}),
-          h("div", { class: "row" }, testBtn, p.api_key_set ? h("button", { class: "btn btn-ghost btn-danger", onclick: async () => {
-            if (!confirm(`Remove the saved ${meta.label} key?`)) return;
-            await api("/api/settings", { method: "PATCH", json: { providers: { [pid]: { api_key: "", enabled: false } } } });
-            await loadSettings(); renderProviders(); toast("Key removed");
-          } }, "Remove key") : null),
-          h("div", { class: "full" }, status)));
-      enabled.addEventListener("change", async () => {
-        await api("/api/settings", { method: "PATCH", json: { providers: { [pid]: { enabled: enabled.checked } } } });
-        await loadSettings(); renderProviders(); renderAgent();
+  // ---- AI connections (saved individually, since connecting needs a live test)
+  const connWrap = h("div", {});
+  const STATE = { connected: ["good", "Connected"], untested: ["", "Not tested"], error: ["bad", "Error"], needs_sign_in: ["warn", "Needs sign-in"], expired: ["warn", "Expired"] };
+  let methods = null;
+
+  // Inputs for a method's fields. Secrets are never sent back, so a saved one shows
+  // as a hint and is only replaced when something is typed.
+  function methodForm(method, conn) {
+    const inputs = {};
+    const clear = new Set();
+    const rows = method.fields.map((f) => {
+      const id = `cf-${f.name}-${++uid}`;
+      const saved = conn?.secrets?.[f.name];
+      const input = h("input", {
+        id, autocomplete: "off",
+        type: f.type === "password" ? "password" : f.type === "url" ? "url" : "text",
+        value: f.secret ? "" : (conn?.fields?.[f.name] ?? f.default ?? ""),
+        placeholder: saved?.set ? `Saved ${saved.hint}. Enter a new one to replace it.` : f.placeholder || "",
       });
-      testBtn.addEventListener("click", async () => {
-        testBtn.disabled = true; status.textContent = "Connecting";
+      inputs[f.name] = input;
+      const extra = [];
+      if (f.help && f.help.startsWith("http")) extra.push(h("a", { href: f.help, target: "_blank", rel: "noopener", class: "hint", style: "margin:0" }, "Get a key"));
+      else if (f.help) extra.push(h("p", { class: "hint" }, f.help));
+      if (saved?.set && !f.required) {
+        const btn = h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Clear saved value");
+        btn.addEventListener("click", () => { clear.add(f.name); input.value = ""; input.placeholder = "Will be cleared when you save"; });
+        extra.push(btn);
+      }
+      return h("div", { class: f.type === "url" ? "full" : "" }, h("label", { for: id }, f.label), input, ...extra);
+    });
+    return {
+      el: h("div", { class: "conn-fields" }, ...rows),
+      read() {
+        const out = {};
+        for (const f of method.fields) {
+          const v = inputs[f.name].value.trim();
+          if (!f.secret) out[f.name] = v;
+          else if (v) out[f.name] = v;
+          else if (clear.has(f.name)) out[f.name] = "";
+        }
+        return out;
+      },
+    };
+  }
+
+  async function afterConnectionChange() {
+    await loadSettings();
+    Object.assign(draft.agent, app.settings.agent);
+    await renderConnections();
+    renderAgent();
+  }
+
+  async function testConnection(c, statusEl) {
+    statusEl.textContent = "Connecting"; statusEl.style.color = "";
+    try {
+      const r = await api(`/api/connections/${c.id}/test`, { method: "POST" });
+      toast(`${c.label} connected: ${r.count} models`);
+    } catch (err) { toast(err.message, "bad"); }
+    await afterConnectionChange();
+  }
+
+  function connCard(c, editable, active) {
+    const method = methods.find((m) => m.id === c.method);
+    const [tone, stateLabel] = STATE[c.status?.state] || ["", c.status?.state || ""];
+    const statusEl = h("span", { class: "hint", style: `margin:0${c.status?.state === "error" ? ";color:var(--bad)" : ""}` },
+      c.status?.state === "error" ? c.status.detail : c.models?.length ? `${c.models.length} model${c.models.length === 1 ? "" : "s"}` : c.status?.detail || "");
+    const enabled = h("input", { type: "checkbox", checked: c.enabled, disabled: !editable, "aria-label": `Enable ${c.label}` });
+    enabled.addEventListener("change", async () => {
+      try { await api(`/api/connections/${c.id}`, { method: "PATCH", json: { enabled: enabled.checked } }); }
+      catch (err) { toast(err.message, "bad"); }
+      await afterConnectionChange();
+    });
+    const editArea = h("div", { hidden: true });
+    const card = h("div", { class: `provider ${c.enabled ? "on" : ""}` },
+      h("div", { class: "provider-head" },
+        h("label", { class: "switch" }, enabled),
+        h("div", { class: "conn-title" }, h("h3", {}, c.label), h("span", { class: "hint", style: "margin:0" }, c.method_label)),
+        h("span", { class: `pill ${tone}` }, stateLabel),
+        h("span", { class: "pill" }, BILLING_LABELS[c.billing] || c.billing),
+        c.id === active ? h("span", { class: "pill accent" }, "Default") : null,
+        h("span", { class: "spacer" }),
+        editable ? h("button", { class: "btn btn-sm", onclick: () => testConnection(c, statusEl) }, "Test") : null,
+        editable ? h("button", { class: "btn btn-sm btn-ghost", onclick: () => { editArea.hidden = !editArea.hidden; } }, "Edit") : null),
+      h("div", { class: "conn-status" }, statusEl),
+      editArea);
+    if (editable && method) {
+      const labelIn = h("input", { type: "text", value: c.label, id: `cl-${c.id}`, maxlength: 60 });
+      const form = methodForm(method, c);
+      const save = h("button", { class: "btn btn-primary btn-sm" }, "Save and test");
+      const remove = h("button", { class: "btn btn-ghost btn-sm btn-danger" }, "Remove connection");
+      save.addEventListener("click", async () => {
+        save.disabled = true;
         try {
-          const r = await api(`/api/providers/${pid}/models`, { method: "POST", json: { api_key: keyInput?.value || null, base_url: urlInput?.value || null } });
-          await loadSettings();
-          if (!app.settings.agent.provider || !app.settings.agent.model) {
-            const pick = r.models[0];
-            if (pick) await api("/api/settings", { method: "PATCH", json: { agent: { provider: pid, model: pick } } });
-            await loadSettings();
-            Object.assign(draft.agent, app.settings.agent);
-          }
-          toast(`${meta.label} connected: ${r.count} models`);
-          renderProviders(); renderAgent();
-        } catch (err) {
-          status.textContent = err.message; status.style.color = "var(--bad)";
-        } finally { testBtn.disabled = false; }
+          await api(`/api/connections/${c.id}`, { method: "PATCH", json: { label: labelIn.value, values: form.read() } });
+          await testConnection(c, statusEl);
+        } catch (err) { toast(err.message, "bad"); save.disabled = false; }
       });
-      provWrap.append(box);
+      remove.addEventListener("click", async () => {
+        if (!confirm(`Remove the connection "${c.label}" and its saved credentials?`)) return;
+        try { await api(`/api/connections/${c.id}`, { method: "DELETE" }); toast("Connection removed"); }
+        catch (err) { toast(err.message, "bad"); }
+        await afterConnectionChange();
+      });
+      editArea.append(h("div", { class: "conn-fields" }, h("div", {}, h("label", { for: labelIn.id }, "Name"), labelIn)), form.el,
+        h("div", { class: "row", style: "margin-top:10px" }, save, h("span", { class: "spacer" }), remove));
     }
+    return card;
+  }
+
+  function addConnectionForm() {
+    const wrap = h("div", { class: "conn-add" });
+    const methodSel = h("select", { id: "conn-method", "aria-label": "Connection type" }, h("option", { value: "" }, "Choose a provider and method"));
+    const byFamily = {};
+    for (const m of methods) (byFamily[m.family_label] ||= []).push(m);
+    for (const [fam, list] of Object.entries(byFamily)) methodSel.append(h("optgroup", { label: fam }, ...list.map((m) => h("option", { value: m.id }, m.label))));
+    const detail = h("div", {});
+    methodSel.addEventListener("change", () => {
+      detail.innerHTML = "";
+      const m = methods.find((x) => x.id === methodSel.value);
+      if (!m) return;
+      const labelIn = h("input", { type: "text", id: "conn-new-label", value: m.family_label, maxlength: 60 });
+      const form = methodForm(m, null);
+      const go = h("button", { class: "btn btn-primary" }, "Connect");
+      const status = h("span", { class: "hint", style: "margin:0" });
+      go.addEventListener("click", async () => {
+        go.disabled = true; status.textContent = "Saving"; status.style.color = "";
+        let created;
+        try {
+          created = await api("/api/connections", { method: "POST", json: { method: m.id, label: labelIn.value, values: form.read() } });
+        } catch (err) { status.textContent = err.message; status.style.color = "var(--bad)"; go.disabled = false; return; }
+        status.textContent = "Testing";
+        try {
+          const r = await api(`/api/connections/${created.id}/test`, { method: "POST" });
+          toast(`${created.label} connected: ${r.count} models`);
+        } catch (err) { toast(`Saved, but the test failed: ${err.message}`, "bad"); }
+        await afterConnectionChange();
+      });
+      detail.append(
+        h("p", { class: "hint" }, m.description, " ", h("span", { class: "pill" }, m.billing_label)),
+        m.compliance ? h("p", { class: "hint" }, m.compliance) : null,
+        h("div", { class: "conn-fields" }, h("div", {}, h("label", { for: labelIn.id }, "Name"), labelIn)),
+        form.el,
+        h("div", { class: "row", style: "margin-top:10px" }, go, status));
+    });
+    wrap.append(h("h3", {}, "Add a connection"), h("div", { class: "conn-fields" }, h("div", { class: "full" }, h("label", { for: "conn-method" }, "Provider"), methodSel)), detail);
+    return wrap;
+  }
+
+  async function renderConnections() {
+    methods ||= (await api("/api/auth-methods")).methods;
+    const { connections: conns, editable, reason, active } = await api("/api/connections");
+    connWrap.innerHTML = "";
+    if (!editable) {
+      connWrap.append(h("div", { class: "issue" }, h("span", {}, reason, " ",
+        h("a", { href: "#/settings", onclick: (e) => { e.preventDefault(); $("#sec-access").scrollIntoView({ behavior: "smooth", block: "start" }); } }, "Go to Access and MCP"))));
+    }
+    if (!conns.length) connWrap.append(h("div", { class: "empty", style: "padding:24px" }, h("h3", {}, "No AI connections yet"), editable ? "Add one below to start designing." : "Set a password to add one."));
+    for (const c of conns) connWrap.append(connCard(c, editable, active));
+    if (editable) connWrap.append(addConnectionForm());
   }
 
   // ---- agent
@@ -1147,11 +1250,11 @@ async function Settings(root) {
   function renderAgent() {
     agentWrap.innerHTML = "";
     const sel = modelSelect({ id: "agent-model" });
-    sel.addEventListener("change", () => { const [p, m] = sel.value.split("::"); draft.agent.provider = p; draft.agent.model = m; markDirty(); });
+    sel.addEventListener("change", () => { const [c, m] = sel.value.split("::"); draft.agent.connection = c; draft.agent.model = m; markDirty(); });
     const custom = h("input", { type: "text", id: "agent-custom", placeholder: "or type a model ID" });
-    custom.addEventListener("input", () => { if (custom.value.trim()) { const [p] = (sel.value || "::").split("::"); draft.agent.provider = p || draft.agent.provider; draft.agent.model = custom.value.trim(); markDirty(); } });
+    custom.addEventListener("input", () => { if (custom.value.trim()) { const [c] = (sel.value || "::").split("::"); draft.agent.connection = c || draft.agent.connection; draft.agent.model = custom.value.trim(); markDirty(); } });
     agentWrap.append(
-      h("div", { class: "grid-2" }, field("Default model", sel, "Used for new requests. You can override it per request in Studio."), field("Custom model ID", custom, "For a model that is not listed, on the provider selected to the left.")),
+      h("div", { class: "grid-2" }, field("Default model", sel, "Used for new requests. You can override it per request in Studio."), field("Custom model ID", custom, "For a model that is not listed, on the connection selected to the left.")),
       h("div", { class: "grid-4", style: "margin-top:16px" },
         field("Max steps", bind("agent.max_iterations", "number", { min: 1, max: 25 }), "Model calls per request"),
         field("Temperature", bind("agent.temperature", "number", { min: 0, max: 2, step: 0.1 })),
@@ -1302,7 +1405,7 @@ async function Settings(root) {
 
   const p = sys.openscad;
   body.append(
-    section("providers", "AI providers", "Connect one or more providers. Keys are encrypted on disk and never sent back to the browser.", provWrap),
+    section("connections", "AI connections", "Add a connection for each way you reach a model: an API key, a local server, or several keys for one provider. Credentials are encrypted on disk and never sent back to the browser.", connWrap),
     section("agent", "Design agent", "How the AI works on a request.", agentWrap),
     section("printer", "Printers", "Save a profile for each printer you own. The agent designs to the active printer's limits, and the viewer draws its build plate. Switch printers here or from the menu above the viewer in Studio.", printerWrap),
     section("render", "Rendering", null,
@@ -1327,7 +1430,7 @@ async function Settings(root) {
         h("a", { class: "btn btn-ghost", href: "/api/docs", target: "_blank" }, "REST API reference"))),
     h("div", { class: "save-bar" }, saveState, saveBtn));
 
-  renderProviders(); renderAgent(); renderAccess(); renderPricing(); renderPrinters();
+  await renderConnections(); renderAgent(); renderAccess(); renderPricing(); renderPrinters();
   if (location.hash.endsWith("#printers") || sessionStorage.getItem("bp-jump") === "printer") {
     sessionStorage.removeItem("bp-jump");
     requestAnimationFrame(() => $("#sec-printer")?.scrollIntoView({ block: "start" }));
@@ -1336,7 +1439,7 @@ async function Settings(root) {
   saveBtn.addEventListener("click", async () => {
     saveBtn.disabled = true;
     try {
-      const { providers, security, printer, ...rest } = draft;
+      const { providers, connections: _c, security, printer, ...rest } = draft;
       rest.security = { session_hours: draft.security.session_hours };
       await api("/api/settings", { method: "PATCH", json: rest });
       // Overrides are replaced as a whole so removals stick.
@@ -1346,7 +1449,7 @@ async function Settings(root) {
       toast("Settings saved");
       Object.assign(draft, structuredClone(app.settings));
       editId = draft.printers.some((x) => x.id === editId) ? editId : draft.active_printer;
-      renderProviders(); renderAgent(); renderAccess(); renderPrinters();
+      renderAgent(); renderAccess(); renderPrinters();
     } catch (err) {
       saveBtn.disabled = false;
       toast(err.message, "bad");
@@ -1491,7 +1594,7 @@ async function openPrinterPicker(existingIds = []) {
 // ================================================================= DOCS
 const DOCS = [
   ["getting-started", "Getting started"],
-  ["providers", "AI providers"],
+  ["providers", "AI connections"],
   ["using-studio", "Using Studio"],
   ["token-usage", "Token usage and cost"],
   ["mcp", "MCP integration"],

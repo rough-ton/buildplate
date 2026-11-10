@@ -63,7 +63,10 @@ CREATE TABLE IF NOT EXISTS runs (
     cache_read_tokens INTEGER NOT NULL DEFAULT 0,
     cache_write_tokens INTEGER NOT NULL DEFAULT 0,
     cost_usd REAL NOT NULL DEFAULT 0,
-    cost_known INTEGER NOT NULL DEFAULT 1
+    cost_known INTEGER NOT NULL DEFAULT 1,
+    connection_id TEXT,
+    auth_method TEXT,
+    billing TEXT
 );
 CREATE TABLE IF NOT EXISTS run_steps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,6 +106,11 @@ def _connect() -> sqlite3.Connection:
 
 _conn: sqlite3.Connection | None = None
 
+
+# Columns added after the first release: table -> {column: type}.
+_ADDED_COLUMNS = {
+    "runs": {"connection_id": "TEXT", "auth_method": "TEXT", "billing": "TEXT"},
+}
 
 # Bump when the search index layout or contents change; existing databases are
 # reindexed on the next start.
@@ -147,6 +155,12 @@ def init() -> None:
     config.ensure_dirs()
     _conn = _connect()
     _conn.executescript(SCHEMA)
+    for table, cols in _ADDED_COLUMNS.items():
+        have = {r["name"] for r in _conn.execute(f"PRAGMA table_info({table})")}
+        for col, typ in cols.items():
+            if col not in have:
+                _conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+    _conn.commit()
     with tx() as c:
         _migrate(c)
         if c.execute("PRAGMA user_version").fetchone()[0] < INDEX_VERSION:
@@ -500,12 +514,24 @@ def add_message(design_id: str, role: str, content: str, run_id: str | None = No
 
 
 # ---- usage -----------------------------------------------------------------
-def start_run(design_id: str | None, prompt: str, provider: str, model: str, source: str) -> str:
+def start_run(
+    design_id: str | None,
+    prompt: str,
+    provider: str,
+    model: str,
+    source: str,
+    connection_id: str | None = None,
+    auth_method: str | None = None,
+    billing: str | None = None,
+) -> str:
+    """Record a design request. provider is the provider family (pricing and reports
+    key on it); billing is api, subscription, cloud or local."""
     rid = uuid.uuid4().hex[:16]
     with tx() as c:
         c.execute(
-            "INSERT INTO runs (id, design_id, source, prompt, provider, model, status, started_at) VALUES (?,?,?,?,?,?,?,?)",
-            (rid, design_id, source, prompt[:4000], provider, model, "running", time.time()),
+            "INSERT INTO runs (id, design_id, source, prompt, provider, model, status, started_at, connection_id, auth_method, billing) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (rid, design_id, source, prompt[:4000], provider, model, "running", time.time(), connection_id, auth_method, billing),
         )
     return rid
 

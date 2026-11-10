@@ -2,11 +2,11 @@
 
 ## "No AI model selected"
 
-Open **Settings > AI providers**, connect a provider, then choose a **Default model** under **Design agent** and select **Save changes**.
+Open **Settings > AI connections**, add a connection, then choose a **Default model** under **Design agent** and select **Save changes**. If the connection controls are read-only, set a password in **Settings > Access and MCP** and sign in first.
 
 ## "The provider rejected the API key"
 
-The key was revoked, mistyped or has no billing set up. Paste it again and select **Test and load models**. Check the provider's console for spending limits.
+The key was revoked, mistyped or has no billing set up. Select **Edit** on the connection, paste the key again and select **Save and test**. Check the provider's console for spending limits.
 
 ## Ollama: "Could not reach ..."
 

@@ -19,7 +19,7 @@ Buildplate runs as a single Docker container. Point it at the AI provider you al
 
 - **One container, nothing to install.** OpenSCAD with the Manifold engine, headless rendering, BOSL2 and MCAD, the backend, the web UI and the MCP endpoint are all inside the image.
 - **Bring any model.** Claude, OpenAI, Gemini, OpenRouter, Ollama, LM Studio, vLLM and other OpenAI-compatible servers. Switch models per request.
-- **Configure everything in the browser.** Add API keys, connect providers, pick models, change your printer profile and limits. Changes are live immediately; nothing restarts or rebuilds.
+- **Configure everything in the browser.** Add AI connections (several per provider if you like), pick models, change your printer profile and limits. Changes are live immediately; nothing restarts or rebuilds.
 - **A design loop that checks its own work.** The agent renders every draft, validates it (watertight, on the bed, inside your build volume) and, with vision-capable models, reviews a four-view preview before saving.
 - **Every major printer.** Pick yours from a catalog of 400+ printers from about 70 manufacturers, with the nozzle sizes you use, and switch the target printer from Studio. The plate, checks and design limits follow, including round beds for deltas.
 - **Live parameters.** Customizer variables become sliders. Drag one and the part re-renders in seconds without spending a single token.
@@ -38,7 +38,7 @@ docker run -d --name buildplate \
   ghcr.io/rough-ton/buildplate:latest
 ```
 
-Open `http://<your-host>:8080`, go to **Settings > AI providers**, paste an API key (or point it at Ollama) and select **Connect**. Then describe your first part in **Studio**.
+Open `http://<your-host>:8080`, set a password in **Settings > Access and MCP**, then go to **Settings > AI connections**, add an API key (or point it at Ollama) and select **Connect**. Then describe your first part in **Studio**.
 
 Prefer Compose? See [docker-compose.yml](docker-compose.yml). Running Unraid? Use the [Unraid template](deploy/unraid/buildplate.xml) and the [Unraid guide](docs/unraid.md).
 
@@ -75,7 +75,7 @@ The same documentation is built into the app under **Docs**.
 | Guide | What it covers |
 | --- | --- |
 | [Getting started](docs/getting-started.md) | Install, first run, first design |
-| [AI providers](docs/providers.md) | Setting up each provider, choosing models, local models |
+| [AI connections](docs/providers.md) | Connecting each provider, choosing models, local models |
 | [Using Studio](docs/using-studio.md) | Prompting, parameters, code editing, versions, exports |
 | [Token usage and cost](docs/token-usage.md) | What is counted, how cost is estimated, keeping usage low |
 | [MCP integration](docs/mcp.md) | Claude Desktop, Claude Code and other MCP clients |

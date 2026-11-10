@@ -47,6 +47,31 @@ def api_allowed(request: Request) -> bool:
     return valid_session(request.cookies.get(COOKIE)) or token_ok(request)
 
 
+_LOOPBACK = {"127.0.0.1", "::1"}
+_FORWARDED = ("x-forwarded-for", "forwarded", "x-real-ip")
+
+
+def is_loopback(request: Request) -> bool:
+    """A request made on the server itself. A reverse proxy on the same host also
+    connects from loopback, so any forwarding header disqualifies the request."""
+    host = request.client.host if request.client else ""
+    return host in _LOOPBACK and not any(h in request.headers for h in _FORWARDED)
+
+
+ADMIN_REQUIRED = (
+    "Set a UI password first (Settings > Access and MCP), then sign in. AI connections hold "
+    "credentials, so changing them needs a password unless you are on the server itself."
+)
+
+
+def admin_allowed(request: Request) -> bool:
+    """Changing AI connections needs a signed-in UI password session, or a request from
+    the server itself. An MCP bearer token is not enough."""
+    if store.password_enabled() and valid_session(request.cookies.get(COOKIE)):
+        return True
+    return is_loopback(request)
+
+
 def mcp_allowed(request: Request) -> bool:
     token = store.get()["security"]["mcp_token"]
     if not token:

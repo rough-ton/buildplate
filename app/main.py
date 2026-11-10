@@ -18,9 +18,9 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
-from . import agent, auth, config, db, openscad, printers, providers, search
+from . import agent, auth, auth_methods, config, connections, db, openscad, printers, search
 from .mcp_server import mcp
-from .settings import PROVIDERS, store
+from .settings import public_connection, store
 
 mcp_app = mcp.streamable_http_app(
     streamable_http_path="/mcp",
@@ -70,8 +70,9 @@ class GenerateBody(BaseModel):
     prompt: str = Field(min_length=1, max_length=8000)
     design_id: str | None = None
     code: str | None = None
-    provider: str | None = None
+    connection: str | None = None
     model: str | None = None
+    provider: str | None = None  # pre-connections: a provider family
 
 
 class RenderBody(BaseModel):
@@ -92,9 +93,17 @@ class TagsBody(BaseModel):
     tags: list[str]
 
 
-class ModelsBody(BaseModel):
-    api_key: str | None = None
-    base_url: str | None = None
+class ConnectionBody(BaseModel):
+    method: str
+    label: str = ""
+    values: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+
+
+class ConnectionPatch(BaseModel):
+    label: str | None = None
+    values: dict[str, Any] | None = None
+    enabled: bool | None = None
 
 
 # ---- auth ----------------------------------------------------------------------
@@ -168,22 +177,66 @@ async def clear_mcp_token():
     return {"ok": True}
 
 
-@app.post("/api/providers/{provider}/models")
-async def provider_models(provider: str, body: ModelsBody):
-    if provider not in PROVIDERS:
-        raise HTTPException(404, "Unknown provider")
+# ---- AI connections --------------------------------------------------------------
+def _admin(request: Request) -> None:
+    if not auth.admin_allowed(request):
+        raise HTTPException(403, auth.ADMIN_REQUIRED)
+
+
+def _conn_errors(fn, *args, **kwargs):
     try:
-        models = await providers.list_models(provider, body.model_dump())
-    except providers.ProviderError as exc:
+        return fn(*args, **kwargs)
+    except KeyError:
+        raise HTTPException(404, "No connection with that id")
+    except auth_methods.MethodError as exc:
         raise HTTPException(400, str(exc))
-    patch: dict[str, Any] = {"models": models[:500]}
-    if body.api_key:
-        patch["api_key"] = body.api_key
-    if body.base_url:
-        patch["base_url"] = body.base_url
-    patch["enabled"] = True
-    store.update({"providers": {provider: patch}})
-    return {"models": models, "count": len(models)}
+
+
+@app.get("/api/auth-methods")
+async def list_auth_methods():
+    return {"methods": auth_methods.catalog(), "billing": auth_methods.BILLING}
+
+
+@app.get("/api/connections")
+async def list_connections(request: Request):
+    editable = auth.admin_allowed(request)
+    return {
+        "connections": connections.public_list(),
+        "active": store.get()["agent"]["connection"],
+        "editable": editable,
+        "reason": "" if editable else auth.ADMIN_REQUIRED,
+    }
+
+
+@app.post("/api/connections")
+async def create_connection(body: ConnectionBody, request: Request):
+    _admin(request)
+    return _conn_errors(connections.create, body.method, body.label, body.values, body.enabled)
+
+
+@app.patch("/api/connections/{cid}")
+async def patch_connection(cid: str, body: ConnectionPatch, request: Request):
+    _admin(request)
+    return _conn_errors(connections.update, cid, body.label, body.values, body.enabled)
+
+
+@app.delete("/api/connections/{cid}")
+async def delete_connection(cid: str, request: Request):
+    _admin(request)
+    _conn_errors(connections.delete, cid)
+    return {"ok": True}
+
+
+@app.post("/api/connections/{cid}/test")
+async def test_connection(cid: str, request: Request):
+    _admin(request)
+    try:
+        models = await connections.test(cid)
+    except KeyError:
+        raise HTTPException(404, "No connection with that id")
+    except auth_methods.MethodError as exc:
+        raise HTTPException(400, str(exc))
+    return {"models": models, "count": len(models), "connection": public_connection(connections.get(cid))}
 
 
 # ---- printers ------------------------------------------------------------------
@@ -278,7 +331,9 @@ async def clear_cache():
 @app.post("/api/generate")
 async def generate(body: GenerateBody):
     async def stream():
-        async for ev in agent.run(body.prompt, body.design_id, body.code, body.provider, body.model):
+        async for ev in agent.run(
+            body.prompt, body.design_id, body.code, connection=body.connection, model=body.model, provider=body.provider
+        ):
             yield json.dumps(ev) + "\n"
 
     return StreamingResponse(stream(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
