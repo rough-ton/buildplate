@@ -563,3 +563,9 @@ dialog.pp.part-dialog { width: min(640px, calc(100vw - 32px)); height: fit-conte
 .pw-action .btn { width: 100%; }
 .pw-form .hint { margin-top: 8px; }
 @media (min-width: 821px) { .pw-action .btn { width: auto; } }
+
+/* ---------- Sign in with ChatGPT ---------- */
+.chatgpt-btn { background: #000; color: #fff; border-color: #000; }
+.chatgpt-btn:hover { background: #222; color: #fff; filter: none; }
+.chatgpt-steps p { margin: 12px 0 8px; }
+.chatgpt-steps textarea { width: 100%; }

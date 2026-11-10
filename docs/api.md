@@ -102,7 +102,9 @@ Event types, in order of appearance:
 | `DELETE /api/connections/{id}` | Remove a connection and its credentials. Same access rule |
 | `POST /api/connections/{id}/test` | Test, save and return the model list. For a Claude plan connection, asks Claude Code whether it is signed in. Same access rule |
 | `POST /api/connections/{id}/oauth/start` | Start Sign in with OpenRouter for a connection. Returns `{url}` to send the browser to; it comes back to `GET /api/oauth/openrouter/callback`. Same access rule as other connection changes |
-| `POST /api/connections/{id}/sign-out` | Sign a Claude plan connection out of Claude Code. Needs a password session |
+| `POST /api/connections/{id}/chatgpt/start` | Start Sign in with ChatGPT for a ChatGPT plan connection. Returns `{url}` to open in a browser. Needs a password session |
+| `POST /api/connections/{id}/chatgpt/finish` | `{url}`: the `http://127.0.0.1:1455/auth/callback?...` address the browser landed on after approving. Checks it, saves the sign-in, tests the connection and returns it with `first_time`. Needs a password session |
+| `POST /api/connections/{id}/sign-out` | Sign a Claude plan connection out of Claude Code, or forget a ChatGPT plan sign-in. Needs a password session |
 | `WS /api/connections/{id}/terminal?action=login\|logout` | Claude Code's own sign-in in a terminal. Needs a password session and a same-origin browser. Frames: `{type: "input"\|"resize"}` in; `{type: "output"\|"error"\|"exit"}` out |
 | `GET /api/claude-code` | Whether Claude Code is installed, its pinned version and install progress |
 | `POST /api/claude-code/install` | Start installing Claude Code. Needs a password session |

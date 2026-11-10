@@ -242,6 +242,13 @@ async def run(
             loop = _litellm_loop(target, run_id, design_id, current_code, prompt, vision, state, mode)
         async for ev in loop:
             yield ev
+        if method.billing == "subscription" and method.runtime != "cli:claude":
+            # plan requests cost nothing extra; keep the API-price estimate on the run
+            r = db.get_run(run_id)
+            ests = [st.get("est_cost_usd") for st in r["steps"]]
+            est = None if not ests or any(e is None for e in ests) else sum(ests)
+            db.set_run_totals(run_id, {k: r[k] for k in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")}, est, len(ests))
+            totals["est_cost_usd"] = est
 
         final, last_good = state["final"], state["last_good"]
         if final is None and last_good:
@@ -291,7 +298,8 @@ async def run(
         if conn_state:
             connections.mark(target.id, conn_state, str(exc))
         message = str(exc) if method.runtime != "litellm" else _friendly(exc)
-        yield {"type": "error", "message": message, "run_id": run_id, "totals": totals}
+        yield {"type": "error", "message": message, "run_id": run_id, "totals": totals,
+               "manage_url": getattr(exc, "manage_url", None)}
 
 
 def hardware_question() -> dict[str, Any]:
@@ -322,6 +330,13 @@ async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: st
     litellm.suppress_debug_info = True
     litellm.drop_params = True
     method, model, kwargs = target.method, target.model, target.kwargs
+    complete = litellm.acompletion
+    if method.runtime == "responses:chatgpt":
+        from . import chatgpt
+
+        # the ChatGPT plan goes through the Responses API, adapted to this loop's calls
+        kwargs = {"model": model}
+        complete = lambda **kw: chatgpt.acompletion(target.id, **kw)  # noqa: E731
     a = store.get()["agent"]
     totals = state["totals"]
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(vision, mode)}]
@@ -337,7 +352,7 @@ async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: st
             call["tools"] = tools
             call["tool_choice"] = "auto"
         try:
-            resp = await litellm.acompletion(**call)
+            resp = await complete(**call)
         except Exception as exc:  # provider error
             msg = str(exc)
             if tool_mode and re.search(r"tool|function", msg, re.I) and step == 1:
