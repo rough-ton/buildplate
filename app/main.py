@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
-from . import agent, auth, config, db, openscad, printers, providers
+from . import agent, auth, config, db, openscad, printers, providers, search
 from .mcp_server import mcp
 from .settings import PROVIDERS, store
 
@@ -85,6 +85,11 @@ class CodeBody(BaseModel):
     code: str
     title: str = "Untitled"
     summary: str = ""
+    tags: list[str] | None = None
+
+
+class TagsBody(BaseModel):
+    tags: list[str]
 
 
 class ModelsBody(BaseModel):
@@ -315,8 +320,30 @@ async def parameters(body: CodeBody):
 
 # ---- library -------------------------------------------------------------------
 @app.get("/api/designs")
-async def designs(q: str = "", limit: int = 200):
-    return {"designs": db.list_designs(limit, q)}
+async def designs(
+    q: str = "",
+    limit: int = 200,
+    sort: str = "",
+    tags: str = "",
+    provider: str = "",
+    model: str = "",
+    source: str = "",
+    printer: str = "",
+    min_size: float | None = None,
+    max_size: float | None = None,
+    after: str = "",
+    before: str = "",
+):
+    try:
+        f = search.filters(tags, provider, model, source, printer, min_size, max_size, after, before)
+        return {"designs": db.list_designs(limit, q, f, sort)}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/api/designs/facets")
+async def design_facets():
+    return db.facets()
 
 
 @app.post("/api/designs")
@@ -327,7 +354,8 @@ async def create_design(body: CodeBody):
         raise HTTPException(422, str(exc))
     did = db.create_design(body.title, "manual")
     v = db.add_version(did, body.code, body.summary or "Created manually.", stats, None)
-    return {"design_id": did, "version": v, "stats": stats}
+    tags = db.set_tags(did, body.tags) if body.tags else []
+    return {"design_id": did, "version": v, "stats": stats, "tags": tags}
 
 
 @app.get("/api/designs/{design_id}")
@@ -366,6 +394,37 @@ async def save_version(design_id: str, body: CodeBody):
 async def rename(design_id: str, body: dict[str, str]):
     db.rename_design(design_id, body.get("title", "Untitled"))
     return {"ok": True}
+
+
+@app.get("/api/designs/{design_id}/tags")
+async def get_tags(design_id: str):
+    if not db.get_design(design_id):
+        raise HTTPException(404, "Design not found")
+    return {"tags": db.get_tags(design_id)}
+
+
+def _tag_op(fn, *args):
+    try:
+        return {"tags": fn(*args)}
+    except KeyError:
+        raise HTTPException(404, "Design not found")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.put("/api/designs/{design_id}/tags")
+async def put_tags(design_id: str, body: TagsBody):
+    return _tag_op(db.set_tags, design_id, body.tags)
+
+
+@app.post("/api/designs/{design_id}/tags")
+async def post_tags(design_id: str, body: TagsBody):
+    return _tag_op(db.add_tags, design_id, body.tags)
+
+
+@app.delete("/api/designs/{design_id}/tags/{tag}")
+async def delete_tag(design_id: str, tag: str):
+    return _tag_op(db.remove_tag, design_id, tag)
 
 
 @app.delete("/api/designs/{design_id}")
