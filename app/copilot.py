@@ -239,6 +239,7 @@ async def design_loop(
     max_iterations: int,
     state: dict[str, Any],
     hardware_mode: str = "ask",
+    images: list[str] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Run one design request on Copilot, yielding Studio events. On return state["final"]
     and state["last_good"] hold the outcome; problems are raised as CopilotError."""
@@ -372,7 +373,10 @@ async def design_loop(
 
         async def drive() -> None:
             try:
-                await session.send_and_wait(prompt_text, timeout=RUN_TIMEOUT)
+                attachments = [{"type": "blob", "data": b, "mimeType": "image/png", "displayName": "reference.png"}
+                               for b in images or []]
+                extra = {"attachments": attachments} if attachments else {}
+                await session.send_and_wait(prompt_text, timeout=RUN_TIMEOUT, **extra)
             finally:
                 put(_DONE)
 

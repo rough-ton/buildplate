@@ -482,3 +482,35 @@ def test_v040_plan_runs_are_corrected_once(tmp_path, monkeypatch):
     assert db.get_run("plan")["input_tokens"] == 11250 and db.get_run("plan")["steps"][0]["input_tokens"] == 4000
     assert db.get_run("api")["input_tokens"] == 9000  # pay-per-use runs were already right
 
+
+
+def test_reference_picture_goes_in_a_stream_json_message(server):
+    import io
+
+    from PIL import Image
+
+    from app import reference
+
+    env = server
+    cid = env.connections.create("anthropic.claude_code", "Plan", {})["id"]
+    env.claude_code.child_env(cid)
+    (env.claude_code.config_dir(cid) / "fake-signed-in").write_text("1")
+    buf = io.BytesIO()
+    Image.new("RGB", (20, 20), "red").save(buf, "PNG")
+    ref = asyncio.run(reference.save("photo.png", buf.getvalue()))
+    events = []
+
+    async def go():
+        async for ev in env.agent.run("a 20 mm test block like this", connection=cid, model="sonnet", reference=ref["id"]):
+            events.append(ev)
+
+    asyncio.run(go())
+    assert events[-1]["type"] == "done", events[-1]
+    last = json.loads((env.claude_code.config_dir(cid) / "last-run.json").read_text())
+    args = last["args"]
+    assert args[args.index("--input-format") + 1] == "stream-json"
+    msg = json.loads(last["prompt"])
+    assert msg["type"] == "user"
+    text, image = msg["message"]["content"]
+    assert "Reference: photo.png" in text["text"]
+    assert image["type"] == "image" and image["source"]["media_type"] == "image/png"

@@ -15,6 +15,7 @@ import time
 from typing import Any, AsyncIterator
 
 from . import connections, db, openscad, parts, providers
+from . import reference as references
 from .auth_methods import MethodError
 from .settings import store
 
@@ -139,14 +140,21 @@ def system_prompt(vision: bool, hardware_mode: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def _history(design_id: str | None, current_code: str | None, prompt: str) -> list[dict[str, Any]]:
+def _history(design_id: str | None, current_code: str | None, prompt: str,
+             ref: dict[str, Any] | None = None, vision: bool = False) -> list[dict[str, Any]]:
+    """The conversation for this request. A reference file goes with the request as its
+    own text (and image, for vision models), kept apart from the design's code; on
+    earlier turns only its name and summary are recalled."""
     msgs: list[dict[str, Any]] = []
     if design_id:
         d = db.get_design(design_id)
         if d:
             turns = [m for m in d["messages"] if m["role"] in ("user", "assistant")][-12:]
             for m in turns:
-                msgs.append({"role": m["role"], "content": m["content"]})
+                content = m["content"]
+                if m.get("reference"):
+                    content += "\n" + references.history_note(m["reference"])
+                msgs.append({"role": m["role"], "content": content})
             if current_code is None:
                 v = db.get_version(design_id)
                 current_code = v["scad"] if v else None
@@ -157,6 +165,15 @@ def _history(design_id: str | None, current_code: str | None, prompt: str) -> li
         )
     else:
         content = f"Design request: {prompt}"
+    if ref:
+        image = vision and ref.get("image_b64")
+        content += "\n\n" + references.prompt_text(ref, bool(image))
+        if image:
+            msgs.append({"role": "user", "content": [
+                {"type": "text", "text": content},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{ref['image_b64']}"}},
+            ]})
+            return msgs
     msgs.append({"role": "user", "content": content})
     return msgs
 
@@ -177,13 +194,21 @@ def _report(stats: dict[str, Any], warnings: list[str]) -> str:
     return "\n".join(lines)
 
 
-def _prompt_text(design_id: str | None, current_code: str | None, prompt: str) -> str:
-    """The conversation as one prompt, for runtimes that take a single message."""
-    *earlier, current = _history(design_id, current_code, prompt)
+def _prompt_text(design_id: str | None, current_code: str | None, prompt: str,
+                 ref: dict[str, Any] | None = None, vision: bool = False) -> str:
+    """The conversation as one prompt, for runtimes that take a single message. A
+    reference image is not included; pass _reference_images() alongside it."""
+    *earlier, current = _history(design_id, current_code, prompt, ref, vision)
+    text = current["content"] if isinstance(current["content"], str) else current["content"][0]["text"]
     if not earlier:
-        return current["content"]
+        return text
     lines = [f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}" for m in earlier]
-    return "Earlier conversation about this design:\n" + "\n\n".join(lines) + "\n\n" + current["content"]
+    return "Earlier conversation about this design:\n" + "\n\n".join(lines) + "\n\n" + text
+
+
+def _reference_images(ref: dict[str, Any] | None, vision: bool) -> list[str]:
+    """Base64 PNGs to send with a single-message prompt."""
+    return [ref["image_b64"]] if ref and vision and ref.get("image_b64") else []
 
 
 async def run(
@@ -195,11 +220,13 @@ async def run(
     source: str = "studio",
     provider: str | None = None,
     hardware_mode: str | None = None,
+    reference: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Run the design loop. connection and model default to the design agent's
     settings; provider (a provider family) is the pre-connections way to choose and
     picks the first enabled connection of that family. The connection's method picks
-    the runtime: Buildplate's own LiteLLM loop, or Claude Code for a Claude plan."""
+    the runtime: Buildplate's own LiteLLM loop, or Claude Code for a Claude plan.
+    reference is the id of an uploaded reference file (see reference.py)."""
     try:
         target = connections.resolve(connection, model, provider)
     except MethodError as exc:
@@ -218,11 +245,25 @@ async def run(
             yield hardware_question()
             return
     vision = providers.supports_vision(method, model)
+    ref = references.load(reference) if reference else None
+    if reference and ref is None:
+        yield {"type": "error", "kind": "reference", "message": "The attached reference file is no longer available. Attach it again."}
+        return
+    if ref and ref["kind"] == "image" and not vision:
+        # say so before any model call, rather than quietly dropping the picture
+        yield {"type": "error", "kind": "reference", "message": (
+            f"{model} can't look at pictures, so it can't use {ref['name']}. Pick a model that accepts images, "
+            "or describe the part in words. (Image previews can also be turned off in Settings > Design agent.)")}
+        return
     run_id = db.start_run(design_id, prompt, provider, model, source, target.id, method.id, method.billing)
     yield {
         "type": "run", "run_id": run_id, "provider": provider, "model": model, "vision": vision, "design_id": design_id,
         "connection": target.id, "connection_label": target.connection["label"], "billing": method.billing,
     }
+    if ref:
+        yield {"type": "reference", "reference": references.public(ref), "image_sent": bool(vision and ref.get("image_b64"))}
+        if ref.get("image_b64") and not vision:
+            yield {"type": "notice", "message": f"This model can't take images, so it gets a text summary of {ref['name']} instead of its render."}
 
     totals: dict[str, Any] = {k: 0 for k in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "total_tokens")}
     totals["cost_usd"] = 0.0
@@ -235,18 +276,19 @@ async def run(
             from . import claude_runtime
 
             loop = claude_runtime.design_loop(
-                target.id, run_id, model, system_prompt(vision, mode), _prompt_text(design_id, current_code, prompt),
-                vision, a["max_iterations"], state, mode,
+                target.id, run_id, model, system_prompt(vision, mode), _prompt_text(design_id, current_code, prompt, ref, vision),
+                vision, a["max_iterations"], state, mode, images=_reference_images(ref, vision),
             )
         elif method.runtime == "sdk:copilot":
             from . import copilot
 
             loop = copilot.design_loop(
                 target.id, connections.values(target.connection)["token"], run_id, model, system_prompt(vision, mode),
-                _prompt_text(design_id, current_code, prompt), vision, a["max_iterations"], state, mode,
+                _prompt_text(design_id, current_code, prompt, ref, vision), vision, a["max_iterations"], state, mode,
+                images=_reference_images(ref, vision),
             )
         else:
-            loop = _litellm_loop(target, run_id, design_id, current_code, prompt, vision, state, mode)
+            loop = _litellm_loop(target, run_id, design_id, current_code, prompt, vision, state, mode, ref)
         async for ev in loop:
             yield ev
         if method.billing == "subscription" and method.runtime != "cli:claude":
@@ -277,7 +319,7 @@ async def run(
         if not tags and isinstance(suggested, list):
             # only tag untagged designs, so the agent never overrides tags the user chose
             tags = db.set_tags(design_id, [str(t) for t in suggested[:5]])
-        db.add_message(design_id, "user", prompt, run_id)
+        db.add_message(design_id, "user", prompt, run_id, references.public(ref) if ref else None)
         db.add_message(design_id, "assistant", final.get("summary") or "Updated the design.", run_id)
         db.finish_run(run_id, "ok", design_id=design_id)
         yield {
@@ -330,7 +372,7 @@ def hardware_question() -> dict[str, Any]:
 
 
 async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: str, vision: bool, state: dict[str, Any],
-                        mode: str = "ask") -> AsyncIterator[dict[str, Any]]:
+                        mode: str = "ask", ref: dict[str, Any] | None = None) -> AsyncIterator[dict[str, Any]]:
     """Buildplate's own tool-calling loop through LiteLLM."""
     import litellm
 
@@ -347,7 +389,7 @@ async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: st
     a = store.get()["agent"]
     totals = state["totals"]
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(vision, mode)}]
-    messages += _history(design_id, current_code, prompt)
+    messages += _history(design_id, current_code, prompt, ref, vision)
     tool_mode = True
     tools = TOOLS + [LIST_PARTS_TOOL]
 

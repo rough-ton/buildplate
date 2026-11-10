@@ -17,13 +17,15 @@ curl -N http://localhost:8080/api/generate \
   -d '{"prompt": "A 40 mm cable clip for a 6 mm cable"}'
 ```
 
-Body fields: `prompt` (required), `design_id` (to modify an existing design), `code` (start from this code instead of the saved version), `connection` (a connection id from `GET /api/connections`) and `model` (override the default), and `hardware_mode` (`ask`, `inventory`, `order` or `none`; see [Parts inventory](parts.md)). The older `provider` field (a provider family such as `anthropic`) still works and picks the first enabled connection of that family.
+Body fields: `prompt` (required), `design_id` (to modify an existing design), `code` (start from this code instead of the saved version), `connection` (a connection id from `GET /api/connections`) and `model` (override the default), and `hardware_mode` (`ask`, `inventory`, `order` or `none`; see [Parts inventory](parts.md)). `reference` is the id of a reference file uploaded with `POST /api/references`. The older `provider` field (a provider family such as `anthropic`) still works and picks the first enabled connection of that family.
 
 Event types, in order of appearance:
 
 | Type | Fields |
 | --- | --- |
 | `run` | `run_id`, `provider` (family), `model`, `vision`, `connection`, `connection_label`, `billing` (`api`, `subscription`, `cloud` or `local`) |
+| `reference` | `reference` (`id`, `name`, `kind`, `kind_label`, `summary`, `image_url`), `image_sent` (whether the model got its picture) |
+| `notice` | `message`, e.g. that a model without vision gets a reference's text summary instead of its render |
 | `status` | `message` |
 | `question` | `kind` (`hardware`), `message`, `options` (`value`, `label`, `detail`, `disabled`). Sent instead of running when a request needs hardware and `hardware_mode` is `ask`; send the request again with the chosen `value` |
 | `usage` | `step`, `usage` (this call), `totals` (so far) |
@@ -33,7 +35,19 @@ Event types, in order of appearance:
 | `check` | `ok`, `stats` or `error` |
 | `preview` | `image` (base64 PNG) |
 | `done` | `design_id`, `version`, `title`, `code`, `summary`, `stats`, `params`, `totals` |
-| `error` | `message`, `totals` |
+| `error` | `message`, `totals`; `kind` is `reference` when the request was refused before running because of its reference file (a picture for a model without vision, or a missing file) |
+
+### `POST /api/references`
+
+Uploads a reference file for a request. Send the file as the raw request body and its name in `name`, which sets its type: a picture (`.png`, `.jpg`, `.jpeg`, `.webp`), `.stl`, `.3mf`, `.scad`, or G-code (`.gcode`, `.gco`, `.g`).
+
+```bash
+curl http://localhost:8080/api/references?name=bracket.stl   -H "Authorization: Bearer $TOKEN" --data-binary @bracket.stl
+```
+
+Returns `id`, `name`, `kind` (`image`, `mesh`, `scad` or `gcode`), `kind_label`, `summary` and `image_url` (the picture or render the agent sees, or `null`). Pass `id` as `reference` to `POST /api/generate`. Errors: 415 for an unsupported type, 413 when too large, 422 when the file cannot be read.
+
+`GET /api/references/{id}/image` returns that picture as PNG.
 
 ## Rendering (no AI)
 

@@ -18,6 +18,19 @@ Starting points:
 
 Press **Enter** to send. Use **Shift+Enter** for a new line.
 
+## Attaching a reference file
+
+Show the agent what you mean by attaching one file to a request: select the paperclip next to the model picker, drag a file onto the prompt, or paste a picture. The agent uses it as a reference to match, and still writes its own parametric design.
+
+| File | What the agent gets |
+| --- | --- |
+| Picture (PNG, JPG, WebP) | The picture itself. Needs a model that accepts images; with one that does not, Buildplate says so before sending anything, and keeps your request and the file so you can pick another model. |
+| STL or 3MF | Its size, volume and general shape, plus a four-view render for models that accept images. |
+| SCAD | The source, marked as a reference so it is never mistaken for the design being edited, plus a render when it renders. To keep working on an existing OpenSCAD design instead, paste it into the **Code** tab. |
+| G-code | The printed area, height, layer count and slicer, recovered from the toolpath (so approximate), plus a top and front drawing of the toolpath for models that accept images. |
+
+The file, or its summary, appears in your message in the conversation. Later requests in the same conversation recall it by name and summary only, so it is not sent again. Limits: pictures 15 MB, STL, 3MF and G-code 50 MB, SCAD 512 KB.
+
 ## What happens during a request
 
 You see each step as it runs:

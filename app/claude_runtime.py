@@ -252,10 +252,12 @@ async def design_loop(
     max_iterations: int,
     state: dict[str, Any],
     hardware_mode: str = "ask",
+    images: list[str] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Run Claude Code for one design request, yielding Studio events. On return,
     state["final"], state["last_good"] and state["totals"] hold the outcome; an error
-    is raised as claude_code.ClaudeCodeError with a user-facing message."""
+    is raised as claude_code.ClaudeCodeError with a user-facing message. images are
+    base64 PNGs sent with the prompt (a reference file's picture)."""
     binary = claude_code.binary()
     if binary is None:
         raise claude_code.ClaudeCodeError("Claude Code is not installed. Open Settings > AI connections and install it.")
@@ -274,6 +276,16 @@ async def design_loop(
         }}}, fh)
 
     args = build_args(str(binary), model, system + SYSTEM_SUFFIX, mcp_path, max_iterations + 2)
+    if images:
+        # a plain-text prompt cannot carry a picture: send one stream-json user message instead
+        args.insert(args.index("--output-format"), "--input-format")
+        args.insert(args.index("--output-format"), "stream-json")
+        stdin_data = json.dumps({"type": "user", "message": {"role": "user", "content": [
+            {"type": "text", "text": prompt_text},
+            *({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b}} for b in images),
+        ]}}) + "\n"
+    else:
+        stdin_data = prompt_text
     proc = await asyncio.create_subprocess_exec(
         *args,
         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
@@ -379,7 +391,7 @@ async def design_loop(
     async def supervise() -> None:
         try:
             assert proc.stdin is not None
-            proc.stdin.write(prompt_text.encode())
+            proc.stdin.write(stdin_data.encode())
             await proc.stdin.drain()
             proc.stdin.close()
             await asyncio.gather(pump_stdout(), pump_stderr())

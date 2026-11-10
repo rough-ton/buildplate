@@ -25,8 +25,9 @@ class FakeSession:
         for h in self.handlers:
             h(e)
 
-    async def send_and_wait(self, prompt, timeout=60.0):
+    async def send_and_wait(self, prompt, timeout=60.0, attachments=None):
         self.fake.prompts.append(prompt)
+        self.fake.attachments.append(attachments)
         tools = {t.name: t for t in self.kw["tools"]}
         for step in self.fake.script.pop(0):
             if step[0] == "tool":
@@ -79,7 +80,7 @@ def env(tmp_path, monkeypatch):
         importlib.reload(m)
     db.init()
     fake = SimpleNamespace(authenticated=True, models=[("gpt-5.2", "enabled"), ("claude-sonnet-4.5", "enabled"), ("o9", "disabled")],
-                           script=[], prompts=[], session=None, stopped=0, aborted=0, tokens=[])
+                           script=[], prompts=[], attachments=[], session=None, stopped=0, aborted=0, tokens=[])
 
     async def client(token, connection_id, workdir):
         fake.tokens.append(token)
@@ -250,3 +251,34 @@ def test_password_gate_and_usage_card(env, monkeypatch):
     (env.tmp / "copilot" / cid).mkdir(parents=True)
     assert client.delete(f"/api/connections/{cid}").json()["ok"]
     assert not (env.tmp / "copilot" / cid).exists()
+
+
+def test_reference_picture_is_sent_as_an_attachment(env):
+    import base64
+    import io
+
+    from PIL import Image
+
+    from app import reference
+
+    importlib.reload(reference)
+    buf = io.BytesIO()
+    Image.new("RGB", (20, 20), "red").save(buf, "PNG")
+    ref = asyncio.run(reference.save("photo.png", buf.getvalue()))
+    cid = connect(env)
+    env.fake.script.append([("tool", "submit_design", {"code": "cube(5);", "title": "Cube", "summary": "A cube."})])
+    events = []
+
+    async def go():
+        async for e in env.agent.run("make this", connection=cid, model="claude-sonnet-4.5", reference=ref["id"]):
+            events.append(e)
+
+    asyncio.run(go())
+    assert events[-1]["type"] == "done"
+    assert "Reference: photo.png" in env.fake.prompts[-1]
+    (att,) = env.fake.attachments[-1]
+    assert att["type"] == "blob" and att["mimeType"] == "image/png" and base64.b64decode(att["data"])[1:4] == b"PNG"
+    # without a reference nothing extra is passed
+    env.fake.script.append([("tool", "submit_design", {"code": "cube(5);", "title": "Cube", "summary": "A cube."})])
+    run(env, cid)
+    assert env.fake.attachments[-1] is None

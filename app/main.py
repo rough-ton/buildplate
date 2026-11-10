@@ -23,6 +23,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
 from . import agent, auth, auth_methods, claude_code, claude_runtime, config, connections, db, openscad, parts, printers, search, terminal
+from . import reference as references
 from .mcp_server import mcp
 from .settings import public_connection, store
 
@@ -89,6 +90,7 @@ class GenerateBody(BaseModel):
     model: str | None = None
     provider: str | None = None  # pre-connections: a provider family
     hardware_mode: str | None = None  # ask | inventory | order | none; default from settings
+    reference: str | None = None  # id from POST /api/references
 
 
 class PartBody(BaseModel):
@@ -566,11 +568,40 @@ async def generate(body: GenerateBody):
     async def stream():
         async for ev in agent.run(
             body.prompt, body.design_id, body.code, connection=body.connection, model=body.model, provider=body.provider,
-            hardware_mode=body.hardware_mode,
+            hardware_mode=body.hardware_mode, reference=body.reference,
         ):
             yield json.dumps(ev) + "\n"
 
     return StreamingResponse(stream(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/references")
+async def upload_reference(request: Request, name: str):
+    """Upload a reference file for the next Studio request: the raw file is the request
+    body and its name (for the type) is in ?name=. Returns its id and summary."""
+    kind = references.kind_of(name)
+    if kind is None:
+        return JSONResponse({"error": "Attach a picture (PNG, JPG, WebP), an STL, 3MF, SCAD or G-code file."}, status_code=415)
+    limit = references.MAX_BYTES[kind]
+    if int(request.headers.get("content-length") or 0) > limit:
+        return JSONResponse({"error": f"That file is too large (up to {limit / 1024**2:g} MB)."}, status_code=413)
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > limit:
+            return JSONResponse({"error": f"That file is too large (up to {limit / 1024**2:g} MB)."}, status_code=413)
+    try:
+        return await references.save(name, bytes(data))
+    except references.ReferenceError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+
+
+@app.get("/api/references/{ref_id}/image")
+async def reference_image(ref_id: str):
+    p = references.image_path(ref_id)
+    if p is None:
+        raise HTTPException(404)
+    return FileResponse(p, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
 # ---- rendering (no AI, no tokens) ------------------------------------------------
