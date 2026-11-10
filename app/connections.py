@@ -141,6 +141,17 @@ def mark(cid: str, state: str, detail: str = "", models: list[str] | None = None
     store.set_connections(conns)
 
 
+def set_plan_limit(cid: str, info: dict[str, Any]) -> None:
+    """Remember the latest plan-limit status Claude Code reported during a run
+    (status allowed / allowed_warning / rejected, utilization, resetsAt)."""
+    conns = all_()
+    for c in conns:
+        if c["id"] == cid:
+            keep = ("status", "utilization", "resetsAt", "errorCode")
+            c.setdefault("status", {})["plan_limit"] = {**{k: info[k] for k in keep if k in info}, "seen_at": time.time()}
+    store.set_connections(conns)
+
+
 async def test(cid: str) -> list[str]:
     """Check a connection by listing its models (for Claude Code, by asking the CLI
     whether it is signed in). Saves the models and the status."""
