@@ -229,6 +229,10 @@ async function Studio(root, [designId]) {
   const hwSel = h("select", { class: "hw-select", "aria-label": "Hardware for this request", title: "How to handle screws, inserts, magnets and other hardware" },
     ...Object.entries(HARDWARE_MODES).map(([v, l]) => h("option", { value: v }, `Hardware: ${l}`)));
   hwSel.value = app.settings.agent.hardware_mode || "ask";
+  // OpenAI asks apps to show when a request uses the ChatGPT plan, with a usage link.
+  const planNote = h("span", { class: "hint", style: "margin:0", hidden: true }, "Using ChatGPT plan \u00b7 ",
+    h("a", { href: CHATGPT_USAGE, target: "_blank", rel: "noopener noreferrer" }, "Manage usage"));
+  const syncPlanNote = () => { planNote.hidden = connectionById((picker.value || "").split("::")[0])?.method !== "openai.chatgpt"; };
   const tags = tagEditor(async (next) => (await api(`/api/designs/${s.designId}/tags`, { method: "PUT", json: { tags: next } })).tags);
   tags.el.hidden = true;
   const left = h("section", { class: "pane pane-left on-mobile", "data-m": "chat" },
@@ -237,7 +241,7 @@ async function Studio(root, [designId]) {
     chat,
     h("div", { class: "composer" }, prompt,
       h("div", { class: "composer-foot" }, picker, h("span", { class: "spacer" }), sendBtn),
-      h("div", { class: "row composer-meta" }, hwSel, h("span", { class: "spacer" }), sessionMeter)));
+      h("div", { class: "row composer-meta" }, hwSel, planNote, h("span", { class: "spacer" }), sessionMeter)));
 
   // ---- center: stage
   const viewEl = h("div", { class: "viewer" });
@@ -744,7 +748,8 @@ async function Studio(root, [designId]) {
             if (ev.bom?.some((p) => p.to_buy)) msgEl.append(h("p", { class: "hint" }, `This design needs parts you don't have. `, h("a", { href: "#", onclick: (e) => { e.preventDefault(); s.tab = "parts"; renderTab(); } }, "See the parts list")));
           } else if (ev.type === "error") {
             totals = ev.totals || totals;
-            msgEl.append(h("div", { class: "err-box" }, ev.message));
+            msgEl.append(h("div", { class: "err-box" }, ev.message,
+              ev.manage_url ? h("div", { style: "margin-top:8px" }, h("a", { class: "btn btn-sm btn-primary", href: ev.manage_url, target: "_blank", rel: "noopener noreferrer" }, "Manage usage")) : null));
           }
         }
       }
@@ -769,6 +774,8 @@ async function Studio(root, [designId]) {
 
   sendBtn.addEventListener("click", () => (s.running ? s.abort?.abort() : generate()));
   hwSel.addEventListener("change", () => hwSel.blur());
+  picker.addEventListener("change", syncPlanNote);
+  syncPlanNote();
   prompt.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !e.shiftKey)) { e.preventDefault(); generate(); }
   });
@@ -949,6 +956,57 @@ async function openClaudeTerminal(cid, action = "login") {
     dialog.addEventListener("close", finish, { once: true });
   });
 }
+
+// Sign in with ChatGPT. OpenAI returns the browser to a 127.0.0.1 address, which only
+// works on the computer running the browser, so the user pastes that address back here
+// and the server finishes the sign-in. Resolves with the connection when done.
+async function openChatGPTSignIn(cid) {
+  const { url } = await api(`/api/connections/${cid}/chatgpt/start`, { method: "POST" });
+  return new Promise((resolve) => {
+    const paste = h("textarea", { rows: 3, class: "mono", placeholder: "http://127.0.0.1:1455/auth/callback?code=...", "aria-label": "Return address from ChatGPT", spellcheck: "false" });
+    const state = h("span", { class: "hint", style: "margin:0" });
+    const finishBtn = h("button", { class: "btn btn-primary" }, "Finish sign-in");
+    const close = h("button", { class: "btn" }, "Cancel");
+    let result = null;
+    const dialog = h("dialog", { class: "pp term", "aria-label": "Continue with ChatGPT" },
+      h("div", { class: "pp-head" }, h("div", {}, h("h2", {}, "Continue with ChatGPT"), h("p", {}, "Sign in on OpenAI's page and allow Buildplate to use your ChatGPT plan."))),
+      h("div", { class: "term-body chatgpt-steps" },
+        h("p", {}, h("strong", {}, "1. "), "Open ChatGPT's sign-in and approve."),
+        h("a", { class: "btn chatgpt-btn", href: url, target: "_blank", rel: "noopener noreferrer" }, "Continue with ChatGPT"),
+        h("p", {}, h("strong", {}, "2. "), "Your browser then opens a page at 127.0.0.1 that can't be reached. That's expected: copy the whole address from the address bar and paste it here."),
+        paste),
+      h("div", { class: "pp-foot" }, state, h("span", { class: "spacer" }), close, finishBtn));
+    document.body.append(dialog);
+    finishBtn.addEventListener("click", async () => {
+      if (!paste.value.trim()) { paste.focus(); return; }
+      finishBtn.disabled = true; state.textContent = "Finishing sign-in"; state.style.color = "";
+      try {
+        result = await api(`/api/connections/${cid}/chatgpt/finish`, { method: "POST", json: { url: paste.value.trim() } });
+        dialog.close();
+      } catch (err) { state.textContent = err.message; state.style.color = "var(--bad)"; finishBtn.disabled = false; }
+    });
+    close.addEventListener("click", () => dialog.close());
+    dialog.addEventListener("close", () => {
+      dialog.remove();
+      if (result?.first_time) chatgptWelcome();
+      resolve(result);
+    });
+    dialog.showModal();
+  });
+}
+
+// Shown once, the first time a connection gets ChatGPT plan use (OpenAI's guidelines).
+function chatgptWelcome() {
+  const dialog = h("dialog", { class: "pp term", "aria-label": "You're using your ChatGPT plan" },
+    h("div", { class: "pp-head" }, h("div", {}, h("h2", {}, "You're using your ChatGPT plan"),
+      h("p", {}, "Design requests on this connection use your ChatGPT plan. You can review usage and set a limit for Buildplate in ChatGPT's settings."))),
+    h("div", { class: "pp-foot" }, h("a", { href: CHATGPT_USAGE, target: "_blank", rel: "noopener noreferrer", class: "btn btn-ghost" }, "Manage usage"),
+      h("span", { class: "spacer" }), h("button", { class: "btn btn-primary", onclick: () => dialog.close() }, "Got it")));
+  document.body.append(dialog);
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.showModal();
+}
+const CHATGPT_USAGE = "https://chatgpt.com/settings/usage";
 
 // Installs the pinned Claude Code release, reporting progress in statusEl.
 async function installClaudeCode(statusEl) {
@@ -1354,7 +1412,7 @@ async function Usage(root) {
 
   // Usage meters for each signed-in Claude plan, from Claude Code's own /usage report.
   async function loadPlanUsage(refresh = false) {
-    const conns = (app.settings?.connections || []).filter((c) => c.method === "anthropic.claude_code" && c.status?.state === "connected");
+    const conns = (app.settings?.connections || []).filter((c) => (c.method === "anthropic.claude_code" || c.method === "openai.chatgpt") && c.status?.state === "connected");
     if (!conns.length) { planSec.hidden = true; return; }
     planSec.hidden = false;
     const body = h("div", { class: "section-body plan-usage" }, h("p", { class: "hint" }, "Asking Claude Code"));
@@ -1398,6 +1456,9 @@ async function Usage(root) {
         const money = (minor) => new Intl.NumberFormat([], { style: "currency", currency: cur }).format(minor / 100);
         wrap.append(h("p", { class: "hint" }, `Usage credits this month: ${money(extra.used_credits)}${extra.monthly_limit != null ? ` of ${money(extra.monthly_limit)}` : ""}`));
       }
+    } else if (u.manage_url) {
+      wrap.append(h("p", { class: "hint", style: "margin:0" }, "ChatGPT doesn't share plan limits with apps. View and manage your ChatGPT usage, and Buildplate's limit, in ChatGPT's settings."),
+        h("div", {}, h("a", { class: "btn btn-sm", href: u.manage_url, target: "_blank", rel: "noopener noreferrer" }, "Manage usage")));
     } else if (u.text) {
       wrap.append(h("pre", { class: "mono plan-text" }, u.text));
     } else {
@@ -1616,6 +1677,7 @@ async function Settings(root, [flag] = []) {
         editable ? h("button", { class: "btn btn-sm btn-ghost", onclick: () => { editArea.hidden = !editArea.hidden; } }, "Edit") : null),
       h("div", { class: "conn-status" }, statusEl),
       isClaude && editable ? claudeActions(c, statusEl) : null,
+      method?.kind === "oauth_tokens" && editable ? chatgptActions(c) : null,
       method?.oauth && editable ? h("div", { class: "row conn-actions" }, h("button", { class: `btn btn-sm ${c.status?.state === "connected" ? "" : "btn-primary"}`, onclick: () => startOAuth(c.id) },
         c.status?.state === "connected" ? "Sign in again" : "Sign in with OpenRouter")) : null,
       editArea);
@@ -1644,6 +1706,24 @@ async function Settings(root, [flag] = []) {
   }
 
   // Install, sign-in and sign-out controls for a Claude plan connection.
+  function chatgptActions(c) {
+    const row = h("div", { class: "row conn-actions" });
+    if (!connCtx.passwordSession) { row.append(h("span", { class: "hint", style: "margin:0" }, connCtx.passwordReason)); return row; }
+    const signIn = async () => { await openChatGPTSignIn(c.id).catch((err) => toast(err.message, "bad")); await afterConnectionChange(); };
+    if (c.status?.state === "connected") {
+      row.append(h("span", { class: "pill accent" }, "Using ChatGPT plan"),
+        h("a", { href: CHATGPT_USAGE, target: "_blank", rel: "noopener noreferrer", class: "hint", style: "margin:0" }, "Manage usage"),
+        h("button", { class: "btn btn-sm btn-ghost", onclick: signIn }, "Sign in again"),
+        h("button", { class: "btn btn-sm", onclick: async () => {
+          if (!confirm(`Sign "${c.label}" out of ChatGPT?`)) return;
+          await api(`/api/connections/${c.id}/sign-out`, { method: "POST" }); toast("Signed out of ChatGPT"); await afterConnectionChange();
+        } }, "Sign out"));
+    } else {
+      row.append(h("button", { class: "btn btn-sm chatgpt-btn", onclick: signIn }, "Continue with ChatGPT"));
+    }
+    return row;
+  }
+
   function claudeActions(c, statusEl) {
     const row = h("div", { class: "row conn-actions" });
     if (!connCtx.passwordSession) {
@@ -1700,7 +1780,7 @@ async function Settings(root, [flag] = []) {
       if (!m) return;
       const labelIn = h("input", { type: "text", id: "conn-new-label", value: m.family_label, maxlength: 60 });
       const form = methodForm(m, null);
-      const go = h("button", { class: "btn btn-primary", disabled: m.requires_password && !connCtx.passwordSession }, m.kind === "cli_session" ? "Add and sign in" : m.oauth ? "Sign in with OpenRouter" : "Connect");
+      const go = h("button", { class: "btn btn-primary", disabled: m.requires_password && !connCtx.passwordSession }, m.kind === "cli_session" ? "Add and sign in" : m.kind === "oauth_tokens" ? "Continue with ChatGPT" : m.oauth ? "Sign in with OpenRouter" : "Connect");
       const status = h("span", { class: "hint", style: "margin:0" }, m.requires_password && !connCtx.passwordSession ? connCtx.passwordReason : "");
       go.addEventListener("click", async () => {
         go.disabled = true; status.textContent = "Saving"; status.style.color = "";
@@ -1709,6 +1789,11 @@ async function Settings(root, [flag] = []) {
           created = await api("/api/connections", { method: "POST", json: { method: m.id, label: labelIn.value, values: form.read() } });
         } catch (err) { status.textContent = err.message; status.style.color = "var(--bad)"; go.disabled = false; return; }
         if (m.oauth) { await startOAuth(created.id); return; }
+        if (m.kind === "oauth_tokens") {
+          try { await openChatGPTSignIn(created.id); } catch (err) { toast(err.message, "bad"); }
+          await afterConnectionChange();
+          return;
+        }
         if (m.kind === "cli_session") {
           try {
             if (!connCtx.claudeCode.installed) await installClaudeCode(status);
@@ -2130,6 +2215,7 @@ async function openPrinterPicker(existingIds = []) {
 const DOCS = [
   ["getting-started", "Getting started"],
   ["providers", "AI connections"],
+  ["provider-rules", "Subscription sign-in"],
   ["using-studio", "Using Studio"],
   ["parts", "Parts inventory"],
   ["token-usage", "Token usage and cost"],

@@ -86,7 +86,7 @@ def create(method_id: str, label: str | None = None, data: dict[str, Any] | None
         "fields": fields,
         "secrets": {k: v for k, v in secrets_.items() if v},
         "models": [],
-        "status": {"state": "needs_sign_in", "detail": "Not signed in yet.", "checked_at": 0} if method.oauth
+        "status": {"state": "needs_sign_in", "detail": "Not signed in yet.", "checked_at": 0} if method.oauth or method.kind == "oauth_tokens"
         else {"state": "untested", "detail": "", "checked_at": 0},
     }
     method.validate(values(conn))
@@ -171,6 +171,22 @@ async def test(cid: str) -> list[str]:
         if st["state"] != "connected":
             raise MethodError(st["detail"])
         if not store.get()["agent"]["connection"]:
+            store.update({"agent": {"connection": cid, "model": models[0]}})
+        return models
+    if method.kind == "oauth_tokens":
+        from . import chatgpt
+
+        st = chatgpt.status(cid)
+        if st["state"] != "connected":
+            mark(cid, st["state"], st["detail"])
+            raise MethodError(st["detail"])
+        try:
+            models = await chatgpt.list_models(cid)
+        except chatgpt.ChatGPTError as exc:
+            mark(cid, exc.connection_state or "error", str(exc))
+            raise
+        mark(cid, "connected", st["detail"], models)
+        if not store.get()["agent"]["connection"] and models:
             store.update({"agent": {"connection": cid, "model": models[0]}})
         return models
     vals = values(conn)

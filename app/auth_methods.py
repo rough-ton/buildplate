@@ -17,7 +17,7 @@ from typing import Any, Awaitable, Callable
 import httpx
 
 KINDS = ("api_key", "oauth_key", "oauth_tokens", "cloud", "cli_session", "none")
-RUNTIMES = ("litellm", "cli:claude")
+RUNTIMES = ("litellm", "cli:claude", "responses:chatgpt")
 BILLING = {
     "api": "Pay per use",
     "subscription": "Uses your plan",
@@ -271,6 +271,10 @@ _METHODS.insert(1, AuthMethod(
     ),
 ))
 
+async def _no_models(v: dict[str, Any]) -> list[str]:
+    return []  # listed per connection by chatgpt.list_models, which needs the connection's sign-in
+
+
 def _register_cloud() -> None:
     from . import cloud
 
@@ -337,6 +341,18 @@ def _register_cloud() -> None:
             fields=(Field("endpoint", "Endpoint", "url", required=True, placeholder="https://your-project.services.ai.azure.com/models"),
                     Field("models", "Model or deployment names", required=True, placeholder="Llama-4-Maverick, DeepSeek-V3"),
                     Field("api_key", "API key", "password", secret=True, required=True)),
+        ),
+        AuthMethod(
+            id="openai.chatgpt", family="openai", family_label="OpenAI", label="ChatGPT plan (Sign in with ChatGPT)",
+            description="Use your ChatGPT Plus or Pro plan through OpenAI's Sign in with ChatGPT, instead of an API key.",
+            kind="oauth_tokens", billing="subscription", fields=(), litellm_prefix="", runtime="responses:chatgpt",
+            list_models=_no_models, vision_default=True, requires_password=True,
+            help_url="https://help.openai.com/en/articles/20001542",
+            compliance=(
+                "You sign in on OpenAI's own page and choose what Buildplate may use. Requests use your ChatGPT plan; "
+                "you can set a weekly limit for Buildplate or disconnect it in ChatGPT's settings. Buildplate keeps "
+                "the sign-in encrypted on your server."
+            ),
         ),
         AuthMethod(
             id="openrouter.oauth", family="openrouter", family_label="OpenRouter", label="Sign in with OpenRouter",
