@@ -11,3 +11,4 @@ networkx>=3.2
 lxml>=5.2
 pillow>=10.3
 cryptography>=42
+google-auth>=2.30,<3  # Vertex AI service accounts (used by LiteLLM)

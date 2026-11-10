@@ -34,12 +34,13 @@ class MethodError(Exception):
 class Field:
     name: str
     label: str
-    type: str = "text"  # text | password | url
+    type: str = "text"  # text | password | url | json (multi-line, can load a file) | select | hidden
     secret: bool = False
     required: bool = False
     default: str = ""
     help: str = ""
     placeholder: str = ""
+    options: tuple[tuple[str, str], ...] = ()  # for select: (value, label)
 
 
 ModelLister = Callable[[dict[str, Any]], Awaitable[list[str]]]
@@ -68,6 +69,16 @@ class AuthMethod:
     # Needs a UI password and a signed-in session to add or change, with no
     # exception for requests from the server itself.
     requires_password: bool = False
+    # Builds LiteLLM kwargs from the field values when the generic api_key/base_url
+    # mapping is not enough (cloud providers).
+    kwargs_builder: Callable[[dict[str, Any], str], dict[str, Any]] | None = field(default=None, repr=False, compare=False)
+    # Extra checks on the field values (raise MethodError).
+    validator: Callable[[dict[str, Any]], None] | None = field(default=None, repr=False, compare=False)
+    # Test by sending one tiny request after listing models (when listing alone does
+    # not prove the credentials can use a model).
+    probe: bool = False
+    # Sign-in flow that fills the credentials ("openrouter").
+    oauth: str = ""
 
     @property
     def secret_fields(self) -> set[str]:
@@ -76,6 +87,8 @@ class AuthMethod:
     def litellm_kwargs(self, values: dict[str, Any], model: str) -> dict[str, Any]:
         if self.runtime != "litellm":
             return {}
+        if self.kwargs_builder:
+            return self.kwargs_builder(values, model)
         kwargs: dict[str, Any] = {"model": self.litellm_prefix + model, **dict(self.fixed)}
         if values.get("api_key"):
             kwargs["api_key"] = values["api_key"]
@@ -89,11 +102,13 @@ class AuthMethod:
         for f in self.fields:
             if f.required and not str(values.get(f.name) or "").strip():
                 raise MethodError(f"{f.label} is required.")
+        if self.validator:
+            self.validator(values)
 
     def public(self) -> dict[str, Any]:
         out = asdict(self)
-        out.pop("list_models", None)
-        out.pop("fixed", None)
+        for k in ("list_models", "fixed", "kwargs_builder", "validator"):
+            out.pop(k, None)
         out["billing_label"] = BILLING[self.billing]
         return out
 
@@ -255,6 +270,84 @@ _METHODS.insert(1, AuthMethod(
         "stores your Claude credentials. Requests use your plan's normal usage limits."
     ),
 ))
+
+def _register_cloud() -> None:
+    from . import cloud
+
+    regions = tuple((r, r) for r in cloud.BEDROCK_REGIONS)
+    region = Field("region", "Region", "select", required=True, default="us-east-1", options=regions)
+    _METHODS.extend([
+        AuthMethod(
+            id="bedrock.iam", family="bedrock", family_label="Amazon Bedrock", label="Bedrock with IAM access keys",
+            description="An IAM user's access key. Buildplate lists the models your account can use. A user limited to Bedrock (and short-term keys) is safest.",
+            kind="cloud", billing="cloud", litellm_prefix="bedrock/", list_models=cloud.bedrock_models,
+            kwargs_builder=cloud.bedrock_kwargs, probe=True, vision_default=True,
+            help_url="https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam.html",
+            fields=(region,
+                    Field("access_key_id", "Access key ID", "password", secret=True, required=True, placeholder="AKIA..."),
+                    Field("secret_access_key", "Secret access key", "password", secret=True, required=True),
+                    Field("session_token", "Session token", "password", secret=True, placeholder="Only for temporary credentials")),
+        ),
+        AuthMethod(
+            id="bedrock.api_key", family="bedrock", family_label="Amazon Bedrock", label="Bedrock API key",
+            description="A Bedrock API key (short-term keys last up to 12 hours). It can call models but not list them, so pick a model after connecting.",
+            kind="cloud", billing="cloud", litellm_prefix="bedrock/", list_models=cloud.bedrock_models,
+            kwargs_builder=cloud.bedrock_kwargs, probe=True, vision_default=True,
+            help_url="https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html",
+            fields=(region, Field("api_key", "Bedrock API key", "password", secret=True, required=True)),
+        ),
+        AuthMethod(
+            id="bedrock.profile", family="bedrock", family_label="Amazon Bedrock", label="Bedrock with an AWS profile",
+            description="A named profile from an AWS config folder mounted into the container (for example ~/.aws at /data/.home/.aws).",
+            kind="cloud", billing="cloud", litellm_prefix="bedrock/", list_models=cloud.bedrock_models,
+            kwargs_builder=cloud.bedrock_kwargs, probe=True, vision_default=True,
+            fields=(region, Field("profile", "Profile name", required=True, default="default")),
+        ),
+        AuthMethod(
+            id="vertex.service_account", family="vertex_ai", family_label="Google Vertex AI", label="Vertex AI service account",
+            description="A service account key for a Google Cloud project with the Vertex AI API on. Gemini and Claude on Vertex are offered.",
+            kind="cloud", billing="cloud", litellm_prefix="vertex_ai/", list_models=cloud.vertex_models,
+            kwargs_builder=cloud.vertex_kwargs, validator=cloud.validate_vertex, probe=True, vision_default=True,
+            help_url="https://cloud.google.com/iam/docs/keys-create-delete",
+            fields=(Field("credentials_json", "Service account key (JSON)", "json", secret=True, required=True,
+                          help="Paste the key file, or load it. It needs the Vertex AI User role."),
+                    Field("project", "Project ID", placeholder="Taken from the key if empty"),
+                    Field("location", "Location", default="us-central1", help="Region for Gemini, or us-east5 / europe-west1 for Claude.")),
+        ),
+        AuthMethod(
+            id="azure.openai", family="azure", family_label="Azure OpenAI", label="Azure OpenAI",
+            description="Deployments in an Azure OpenAI resource, with the resource's API key or an Entra ID service principal.",
+            kind="cloud", billing="cloud", litellm_prefix="azure/", list_models=cloud.azure_models,
+            kwargs_builder=cloud.azure_kwargs, validator=cloud.validate_azure, probe=True, vision_default=True,
+            help_url="https://learn.microsoft.com/azure/ai-services/openai/",
+            fields=(Field("endpoint", "Endpoint", "url", required=True, placeholder="https://your-resource.openai.azure.com"),
+                    Field("deployments", "Deployment names", placeholder="gpt-5, gpt-5-mini", help="Comma-separated. These become the models you can pick."),
+                    Field("api_version", "API version", default=cloud.AZURE_API_VERSION),
+                    Field("api_key", "API key", "password", secret=True, placeholder="Or use a service principal below"),
+                    Field("tenant_id", "Tenant ID (Entra ID)"),
+                    Field("client_id", "Client ID (Entra ID)"),
+                    Field("client_secret", "Client secret (Entra ID)", "password", secret=True)),
+        ),
+        AuthMethod(
+            id="azure.foundry", family="azure_ai", family_label="Microsoft Foundry", label="Microsoft Foundry models",
+            description="Models deployed in a Microsoft Foundry project, such as Llama, Mistral, DeepSeek or Grok.",
+            kind="cloud", billing="cloud", litellm_prefix="azure_ai/", list_models=cloud.foundry_models,
+            kwargs_builder=cloud.foundry_kwargs, validator=cloud.validate_foundry, probe=True,
+            help_url="https://learn.microsoft.com/azure/ai-foundry/",
+            fields=(Field("endpoint", "Endpoint", "url", required=True, placeholder="https://your-project.services.ai.azure.com/models"),
+                    Field("models", "Model or deployment names", required=True, placeholder="Llama-4-Maverick, DeepSeek-V3"),
+                    Field("api_key", "API key", "password", secret=True, required=True)),
+        ),
+        AuthMethod(
+            id="openrouter.oauth", family="openrouter", family_label="OpenRouter", label="Sign in with OpenRouter",
+            description="Sign in on OpenRouter and Buildplate gets a key that you own and can revoke there. Billed to your OpenRouter account.",
+            kind="oauth_key", billing="api", litellm_prefix="openrouter/", list_models=_openrouter, oauth="openrouter",
+            fields=(Field("api_key", "API key", "hidden", secret=True),),
+        ),
+    ])
+
+
+_register_cloud()
 
 METHODS: dict[str, AuthMethod] = {m.id: m for m in _METHODS}
 

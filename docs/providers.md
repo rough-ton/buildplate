@@ -13,10 +13,15 @@ Connections live in **Settings > AI connections** and take effect immediately.
 | OpenAI | OpenAI API key | API key | Pay per use | [platform.openai.com](https://platform.openai.com/api-keys) |
 | Google Gemini | Gemini API key | API key | Pay per use | [aistudio.google.com](https://aistudio.google.com/apikey) |
 | OpenRouter | OpenRouter API key | API key | Pay per use | [openrouter.ai](https://openrouter.ai/keys) |
+| OpenRouter | Sign in with OpenRouter | Nothing: you sign in on OpenRouter | Pay per use | An OpenRouter account. See [below](#sign-in-with-openrouter) |
 | xAI | xAI API key | API key | Pay per use | [console.x.ai](https://console.x.ai) |
 | Mistral | Mistral API key | API key | Pay per use | [console.mistral.ai](https://console.mistral.ai/api-keys) |
 | Groq | Groq API key | API key | Pay per use | [console.groq.com](https://console.groq.com/keys) |
 | DeepSeek | DeepSeek API key | API key | Pay per use | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
+| Amazon Bedrock | IAM access keys, Bedrock API key, or AWS profile | Region and credentials | Cloud account | [AWS console](https://console.aws.amazon.com/bedrock) |
+| Google Vertex AI | Service account | Service account key (JSON), project, location | Cloud account | [Google Cloud console](https://console.cloud.google.com/vertex-ai) |
+| Azure OpenAI | API key or Entra ID service principal | Endpoint, deployment names, credentials | Cloud account | [Azure portal](https://portal.azure.com) |
+| Microsoft Foundry | API key | Models endpoint, model names, API key | Cloud account | [Foundry portal](https://ai.azure.com) |
 | Ollama | Ollama | Base URL | Local | Your Ollama server, for example `http://192.168.1.10:11434` |
 | OpenAI-compatible | OpenAI-compatible server | Base URL and optional key | Local | LM Studio, vLLM, LocalAI, llama.cpp server, LiteLLM proxy |
 
@@ -59,6 +64,37 @@ How it works and what it can do:
 - Requests use your plan's normal usage limits. Studio and Usage show **Included in plan** instead of a cost, with the API-price equivalent on hover. When the plan's limit is reached, the request stops with a message saying so.
 - **Sign out** on the card signs Claude Code out. Removing the connection signs out and deletes its Claude Code folder.
 - Buildplate does not resell or pay for Claude usage. You use your own plan under your own agreement with Anthropic.
+
+## Sign in with OpenRouter
+
+Instead of pasting a key, choose **OpenRouter > Sign in with OpenRouter** and select **Sign in with OpenRouter**. Your browser goes to OpenRouter, you sign in and approve, and OpenRouter sends you back to Buildplate with a new key labelled "Buildplate" that you own. You can see, limit or revoke it on OpenRouter's [keys page](https://openrouter.ai/keys).
+
+The sign-in comes back to the address you opened Buildplate on, or to **Public URL** in **Settings > Access and MCP** if you set one. If OpenRouter cannot send you back (for example the address only works inside your network and OpenRouter rejects it), set Public URL to an address your browser can reach, or paste an API key instead.
+
+## Cloud accounts
+
+Use the AI models in your own AWS, Google Cloud or Azure account. Requests are billed by your cloud provider; Usage shows them as **Cloud account** with the estimated list price.
+
+Connecting a cloud account sends **one tiny test request** (a few tokens, using the cheapest-looking model in the list) to check that the credentials, region and model access all work. If it fails, the card says why: rejected credentials, no access to the model, or a model or deployment that does not exist.
+
+**Amazon Bedrock**
+
+- **IAM access keys**: an access key for an IAM user (or temporary credentials with a session token). Buildplate lists the models and inference profiles your account can use in that region. A user with only the `bedrock:InvokeModel*` and `bedrock:List*` permissions is enough.
+- **Bedrock API key**: a key from the Bedrock console. API keys can call models but not list them, so Buildplate suggests models Bedrock offers; pick one your account can use.
+- **AWS profile**: a named profile from an AWS config folder you mount into the container at `/data/.home/.aws`.
+- Many newer models need a cross-region inference profile ID, such as `us.anthropic...`. Use the IDs Buildplate lists, or type one as a custom model.
+
+**Google Vertex AI**
+
+Create a service account with the **Vertex AI User** role, create a JSON key for it, and paste or load the file. The project comes from the key unless you enter another. Gemini models use regions such as `us-central1`; Claude on Vertex needs a region that offers it, such as `us-east5` or `europe-west1`. Vertex AI express-mode API keys are not supported; use a Gemini API key connection for those models instead.
+
+**Azure OpenAI**
+
+Enter the resource endpoint (`https://<resource>.openai.azure.com`), the deployment names you created (they become the models you can pick), and either the resource's API key or an Entra ID service principal (tenant ID, client ID and client secret, with the **Cognitive Services OpenAI User** role).
+
+**Microsoft Foundry**
+
+For non-OpenAI models deployed in a Foundry project (Llama, Mistral, DeepSeek, Grok and others), enter the project's models endpoint (`https://<project>.services.ai.azure.com/models`), the model or deployment names, and the API key.
 
 ## Choosing a model
 

@@ -86,7 +86,8 @@ def create(method_id: str, label: str | None = None, data: dict[str, Any] | None
         "fields": fields,
         "secrets": {k: v for k, v in secrets_.items() if v},
         "models": [],
-        "status": {"state": "untested", "detail": "", "checked_at": 0},
+        "status": {"state": "needs_sign_in", "detail": "Not signed in yet.", "checked_at": 0} if method.oauth
+        else {"state": "untested", "detail": "", "checked_at": 0},
     }
     method.validate(values(conn))
     store.set_connections(all_() + [conn])
@@ -172,13 +173,26 @@ async def test(cid: str) -> list[str]:
         if not store.get()["agent"]["connection"]:
             store.update({"agent": {"connection": cid, "model": models[0]}})
         return models
+    vals = values(conn)
+    if method.oauth and not vals.get("api_key"):
+        mark(cid, "needs_sign_in", "Not signed in yet.")
+        raise MethodError("Not signed in yet. Select Sign in.")
+    detail = ""
     try:
-        method.validate(values(conn))
-        models = await method.list_models(values(conn))
+        method.validate(vals)
+        models = await method.list_models(vals)
+        if method.probe:
+            if not models:
+                raise MethodError("No models to test with. Add a deployment or model name.")
+            from . import cloud
+
+            probe_model = cloud.pick_probe_model(models)
+            await cloud.probe(method.litellm_kwargs(vals, probe_model))
+            detail = f"Tested with {probe_model}"
     except MethodError as exc:
         mark(cid, "error", str(exc))
         raise
-    mark(cid, "connected", f"{len(models)} models", models)
+    mark(cid, "connected", detail or f"{len(models)} models", models)
     if not store.get()["agent"]["connection"] and models:
         store.update({"agent": {"connection": cid, "model": models[0]}})
     return models
