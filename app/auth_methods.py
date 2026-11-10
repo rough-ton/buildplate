@@ -17,7 +17,7 @@ from typing import Any, Awaitable, Callable
 import httpx
 
 KINDS = ("api_key", "oauth_key", "oauth_tokens", "cloud", "cli_session", "none")
-RUNTIMES = ("litellm", "cli:claude", "responses:chatgpt")
+RUNTIMES = ("litellm", "cli:claude", "responses:chatgpt", "sdk:copilot")
 BILLING = {
     "api": "Pay per use",
     "subscription": "Uses your plan",
@@ -41,6 +41,7 @@ class Field:
     help: str = ""
     placeholder: str = ""
     options: tuple[tuple[str, str], ...] = ()  # for select: (value, label)
+    link_label: str = ""  # text for a help link (help is a URL); default "Get a key"
 
 
 ModelLister = Callable[[dict[str, Any]], Awaitable[list[str]]]
@@ -271,6 +272,18 @@ _METHODS.insert(1, AuthMethod(
     ),
 ))
 
+async def _copilot_models(v: dict[str, Any]) -> list[str]:
+    from . import copilot
+
+    return await copilot.list_models(v)
+
+
+def _copilot_validate(v: dict[str, Any]) -> None:
+    from . import copilot
+
+    copilot.validate(v)
+
+
 async def _no_models(v: dict[str, Any]) -> list[str]:
     return []  # listed per connection by chatgpt.list_models, which needs the connection's sign-in
 
@@ -352,6 +365,26 @@ def _register_cloud() -> None:
                 "You sign in on OpenAI's own page and choose what Buildplate may use. Requests use your ChatGPT plan; "
                 "you can set a weekly limit for Buildplate or disconnect it in ChatGPT's settings. Buildplate keeps "
                 "the sign-in encrypted on your server."
+            ),
+        ),
+        AuthMethod(
+            id="github.copilot", family="github", family_label="GitHub", label="Copilot plan (GitHub token)",
+            description="Use your GitHub Copilot plan through GitHub's Copilot SDK, instead of an API key.",
+            kind="api_key", billing="subscription", litellm_prefix="", runtime="sdk:copilot",
+            list_models=_copilot_models, validator=_copilot_validate, vision_default=True, requires_password=True,
+            help_url="https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/authenticate",
+            fields=(Field(
+                "token", "GitHub token", "password", secret=True, required=True, placeholder="github_pat_...",
+                help="https://github.com/settings/personal-access-tokens/new?name=Buildplate"
+                     "&description=Lets+Buildplate+use+my+Copilot+plan&expires_in=90&copilot_requests=write",
+                link_label="Create token on GitHub",
+            ),),
+            compliance=(
+                "Create a fine-grained token on GitHub with only the Copilot requests permission (the link fills it in), "
+                "then paste it here. Requests use your Copilot plan's premium requests. Buildplate runs GitHub's own "
+                "Copilot runtime with no shell, file or web access, and keeps the token encrypted on your server. "
+                "You can revoke the token on GitHub at any time. The first Copilot connection downloads GitHub's "
+                "Copilot runtime (about 90 MB), so connecting takes a minute."
             ),
         ),
         AuthMethod(

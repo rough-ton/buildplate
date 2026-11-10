@@ -12,3 +12,4 @@ lxml>=5.2
 pillow>=10.3
 cryptography>=42
 google-auth>=2.30,<3  # Vertex AI service accounts (used by LiteLLM)
+github-copilot-sdk==1.0.26  # GitHub Copilot plan; downloads GitHub's runtime on first use
