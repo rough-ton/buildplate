@@ -316,7 +316,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
 .tag-input:focus { border-color: var(--line-strong) !important; background: var(--panel) !important; box-shadow: none !important; }
 
 /* ---------- usage ---------- */
-.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
 .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
 .kpi .k { color: var(--ink-2); font-size: 13px; }
 .kpi .v { font-size: 24px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; margin-top: 2px; }
@@ -495,3 +495,17 @@ dialog.pp.term { width: min(900px, calc(100vw - 32px)); height: fit-content; max
 .term .pp-foot input { width: min(360px, 40vw); height: 30px; font-size: 12.5px; }
 .conn-actions { margin: 10px 0 0 44px; }
 @media (max-width: 720px) { .conn-actions { margin-left: 0; } .term .pp-foot { flex-wrap: wrap; } .term .pp-foot input { width: 100%; } }
+
+/* ---------- plan usage ---------- */
+.plan-cost { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pill.plan-tag { height: 18px; padding: 0 6px; font-size: 11px; background: var(--accent-soft); color: var(--ink); border-color: transparent; }
+.pill.accent .plan-tag { background: var(--panel); }
+.plan-usage { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.plan-box h3 { margin: 0 0 8px; font-size: 14.5px; font-weight: 600; }
+.plan-meters { display: flex; flex-direction: column; gap: 10px; }
+.plan-meter .meter { height: 8px; border-radius: 4px; background: var(--sunken); border: 1px solid var(--line); overflow: hidden; margin-top: 4px; }
+.plan-meter .meter i { display: block; height: 100%; background: var(--accent); }
+.plan-meter.warning .meter i { background: var(--warn); }
+.plan-meter.critical .meter i { background: var(--bad); }
+.plan-meter .hint { margin: 2px 0 0; }
+.plan-text { white-space: pre-wrap; margin: 0; font-size: 12px; }
