@@ -57,9 +57,10 @@ Event types, in order of appearance:
 | `PUT /api/designs/{id}/tags` | Replace tags: `{tags: [...]}`. Tags are lowercased, at most 30 per design |
 | `POST /api/designs/{id}/tags` | Add tags: `{tags: [...]}` |
 | `DELETE /api/designs/{id}/tags/{tag}` | Remove one tag |
-| `GET /api/designs/{id}/versions/{v}` | One version |
+| `GET /api/designs/{id}/versions/{v}` | One version, with `params` and the saved `param_values` |
+| `PUT /api/designs/{id}/versions/{v}/params` | Save the parameter values tuned in Studio: `{values: {name: value}}`. Names the code doesn't declare are dropped; `{}` clears them |
 | `POST /api/designs/{id}/versions` | Save code as a new version: `{code, summary?}` |
-| `GET /api/designs/{id}/download?format=stl\|3mf\|scad\|png&version=&params=` | Download; `params` is URL-encoded JSON of overrides |
+| `GET /api/designs/{id}/download?format=stl\|3mf\|scad\|png&version=&params=` | Download; `params` is URL-encoded JSON of overrides. Without it, the version's saved `param_values` are used (except for `scad`) |
 
 ## Parts inventory
 
