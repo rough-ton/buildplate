@@ -509,3 +509,18 @@ dialog.pp.term { width: min(900px, calc(100vw - 32px)); height: fit-content; max
 .plan-meter.critical .meter i { background: var(--bad); }
 .plan-meter .hint { margin: 2px 0 0; }
 .plan-text { white-space: pre-wrap; margin: 0; font-size: 12px; }
+
+/* ---------- about and Buy Me a Coffee ---------- */
+/* Drawn locally in Buy Me a Coffee's colours: no third-party script or image is loaded. */
+.bmc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 10px;
+  background: #FFDD00; color: #000; border: 1px solid #000; font-weight: 600; font-size: 15px; text-decoration: none; white-space: nowrap; }
+.bmc-btn:hover { filter: brightness(1.04); box-shadow: 0 2px 8px rgba(0, 0, 0, .15); }
+.bmc-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bmc-btn svg { width: 22px; height: 22px; flex: none; display: block; }
+.bmc-icon { display: inline-flex; }
+.bmc-btn-sm { height: 32px; padding: 0 10px; font-size: 13px; border-radius: var(--radius-sm); gap: 6px; }
+.bmc-btn-sm svg { width: 18px; height: 18px; }
+.about { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: space-between; }
+.about-text { flex: 1; min-width: 240px; }
+.about-text p { margin: 0 0 8px; color: var(--ink-2); max-width: 60ch; }
+.about-sub { font-size: 14px; font-weight: 600; margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid var(--line); }

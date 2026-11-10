@@ -1257,7 +1257,7 @@ async function Settings(root) {
 
   page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Settings"), h("p", {}, "Changes apply immediately. Nothing needs a restart or rebuild."))));
   const toc = h("nav", { class: "toc", "aria-label": "Settings sections" },
-    ...[["connections", "AI connections"], ["agent", "Design agent"], ["printer", "Printers"], ["render", "Rendering"], ["access", "Access and MCP"], ["pricing", "Pricing"], ["system", "System"]].map(([id, l]) => h("a", { href: `#/settings`, onclick: (e) => { e.preventDefault(); $(`#sec-${id}`).scrollIntoView({ behavior: "smooth", block: "start" }); } }, l)));
+    ...[["connections", "AI connections"], ["agent", "Design agent"], ["printer", "Printers"], ["render", "Rendering"], ["access", "Access and MCP"], ["pricing", "Pricing"], ["about", "About"]].map(([id, l]) => h("a", { href: `#/settings`, onclick: (e) => { e.preventDefault(); $(`#sec-${id}`).scrollIntoView({ behavior: "smooth", block: "start" }); } }, l)));
   const body = h("div", {});
   page.append(h("div", { class: "settings-layout" }, toc, body));
   root.append(page);
@@ -1552,8 +1552,8 @@ async function Settings(root) {
     const m = h("input", { type: "text", placeholder: "provider/model, e.g. openrouter/some-model", id: "po-m" });
     const i = h("input", { type: "number", step: "0.01", placeholder: "0.00", id: "po-i" });
     const o = h("input", { type: "number", step: "0.01", placeholder: "0.00", id: "po-o" });
+    if (rows.length) priceWrap.append(h("table", { class: "data", style: "margin-bottom:16px" }, h("thead", {}, h("tr", {}, h("th", {}, "Model"), h("th", { class: "r" }, "Input per 1M"), h("th", { class: "r" }, "Output per 1M"), h("th", {}))), tbody));
     priceWrap.append(
-      rows.length ? h("table", { class: "data", style: "margin-bottom:16px" }, h("thead", {}, h("tr", {}, h("th", {}, "Model"), h("th", { class: "r" }, "Input per 1M"), h("th", { class: "r" }, "Output per 1M"), h("th", {}))), tbody) : null,
       h("div", { class: "grid-4", style: "align-items:end" }, field("Model", m), field("Input $ per 1M tokens", i), field("Output $ per 1M tokens", o),
         h("div", {}, h("button", { class: "btn", onclick: () => { if (!m.value.includes("/")) return toast("Use the form provider/model", "bad"); ov[m.value.trim()] = { input: Number(i.value || 0), output: Number(o.value || 0) }; markDirty(); renderPricing(); } }, "Add price"))));
   }
@@ -1648,7 +1648,17 @@ async function Settings(root) {
         field("Preview colours", bind("render.colorscheme", "select", { options: ["Tomorrow", "Cornfield", "Metallic", "Sunset", "Starnight", "BeforeDawn", "Nature", "DeepOcean", "Solarized", "Tomorrow Night", "Monotone"].map((c) => [c, c]) })))),
     section("access", "Access and MCP", null, accessWrap),
     section("pricing", "Pricing overrides", "Costs come from LiteLLM's price list. Add a price here for models it does not know, or to match a negotiated rate. Local models are free.", priceWrap),
-    section("system", "System", null,
+    section("about", "About", null,
+      h("div", { class: "about" },
+        h("div", { class: "about-text" },
+          h("p", {}, "Buildplate is an open-source project by Mike Roughton, released under the MIT license."),
+          h("p", {}, "If it saves you time at the printer, you can support its development with a coffee."),
+          h("div", { class: "row" },
+            h("a", { class: "btn btn-sm", href: "https://github.com/rough-ton/buildplate", target: "_blank", rel: "noopener noreferrer" }, "Source on GitHub"),
+            h("a", { class: "btn btn-sm btn-ghost", href: "https://github.com/rough-ton/buildplate/issues/new", target: "_blank", rel: "noopener noreferrer" }, "Report a problem"))),
+        h("a", { class: "bmc-btn", href: "https://www.buymeacoffee.com/mikeroughton", target: "_blank", rel: "noopener noreferrer" },
+          h("span", { class: "bmc-icon", html: '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#coffee"/></svg>' }), h("span", {}, "Buy me a coffee"))),
+      h("h3", { class: "about-sub" }, "System"),
       h("dl", { class: "kv" },
         h("dt", {}, "Buildplate"), h("dd", {}, sys.version),
         h("dt", {}, "OpenSCAD"), h("dd", {}, p.available ? `${p.version}${p.manifold ? " with Manifold" : ""}` : h("span", { style: "color:var(--bad)" }, `Not working: ${p.error || "not found"}`)),
