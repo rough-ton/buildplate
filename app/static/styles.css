@@ -366,6 +366,13 @@ table.data .prompt { max-width: 340px; overflow: hidden; text-overflow: ellipsis
 .kv { display: grid; grid-template-columns: 180px 1fr; gap: 8px 16px; margin: 0; }
 .kv dt { color: var(--ink-3); }
 .kv dd { margin: 0; word-break: break-all; }
+.update-status { margin-left: 10px; word-break: normal; white-space: nowrap; }
+.update-status > * { display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom; }
+.update-status-ok { color: var(--good); }
+.update-status-new { color: var(--warn); font-weight: 600; }
+.update-status-new:hover { text-decoration: underline; }
+.update-icon { display: inline-flex; }
+.update-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ---------- docs ---------- */
 .docs-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px; }

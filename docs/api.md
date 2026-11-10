@@ -113,6 +113,7 @@ Event types, in order of appearance:
 | `POST /api/settings/mcp-token` | Generate a new MCP token (returned once) |
 | `DELETE /api/settings/mcp-token` | Remove the MCP token |
 | `GET /api/system` | Versions, libraries, storage |
+| `GET /api/system/update` | Whether a newer release is on GitHub: `{current, checked, latest, update_available, url}`. `latest` is `null` when the check is off, the build has no release version, or GitHub couldn't be reached; it never returns an error. Cached for 6 hours |
 | `POST /api/system/clear-cache` | Delete cached renders |
 | `GET /api/health` | Health check (no auth) |
 

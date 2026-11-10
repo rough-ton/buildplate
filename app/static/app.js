@@ -70,6 +70,8 @@ async function api(path, opts = {}) {
 const icons = {
   send: '<svg viewBox="0 0 24 24"><path d="M4 12h14 M12 5l7 7-7 7"/></svg>',
   stop: '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg>',
+  alert: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5 M12 16.5v.01"/></svg>',
   download: '<svg viewBox="0 0 24 24"><path d="M12 4v11 M7 10l5 5 5-5 M5 20h14"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14 M5 12h14"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>',
@@ -2062,6 +2064,20 @@ async function Settings(root, [flag] = []) {
       h("div", { class: "row printer-add" }, addBtn, blankBtn));
   }
 
+  // Whether a newer release is on GitHub, shown after the version. Filled in after the
+  // page draws so a slow or offline check never holds Settings up.
+  const updateSlot = h("span", { class: "update-status" });
+  async function checkUpdate() {
+    const u = await api("/api/system/update").catch(() => null);
+    if (!u?.latest) { updateSlot.replaceChildren(); return; }
+    updateSlot.replaceChildren(u.update_available
+      ? h("a", { class: "update-status-new", href: u.url, target: "_blank", rel: "noopener noreferrer", title: `See what's new in v${u.latest}` },
+          h("span", { class: "update-icon", html: icons.alert, "aria-hidden": "true" }), `update available (v${u.latest})`)
+      : h("span", { class: "update-status-ok" }, h("span", { class: "update-icon", html: icons.check, "aria-hidden": "true" }), "up-to-date"));
+  }
+  const updateCheck = h("select", { id: "f-update-check" }, h("option", { value: "on", selected: draft.updates.check }, "On"), h("option", { value: "off", selected: !draft.updates.check }, "Off"));
+  updateCheck.addEventListener("change", () => { draft.updates.check = updateCheck.value === "on"; markDirty(); });
+
   const p = sys.openscad;
   body.append(
     section("connections", "AI connections", "Add a connection for each way you reach a model: an API key, a local server, or several keys for one provider. Credentials are encrypted on disk and never sent back to the browser.", connWrap),
@@ -2094,19 +2110,22 @@ async function Settings(root, [flag] = []) {
           h("span", { class: "bmc-icon", html: '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#coffee"/></svg>' }), h("span", {}, "Buy me a coffee"))),
       h("h3", { class: "about-sub" }, "System"),
       h("dl", { class: "kv" },
-        h("dt", {}, "Buildplate"), h("dd", {}, sys.version),
+        h("dt", {}, "Buildplate"), h("dd", {}, sys.version, updateSlot),
         h("dt", {}, "OpenSCAD"), h("dd", {}, p.available ? `${p.version}${p.manifold ? " with Manifold" : ""}` : h("span", { style: "color:var(--bad)" }, `Not working: ${p.error || "not found"}`)),
         h("dt", {}, "Libraries"), h("dd", {}, sys.libraries.map((l) => l.name).join(", ") || "none"),
         h("dt", {}, "Your libraries folder"), h("dd", { class: "mono" }, sys.user_library_dir),
         h("dt", {}, "Data folder"), h("dd", { class: "mono" }, sys.data_dir),
         h("dt", {}, "Render cache"), h("dd", {}, `${(sys.cache_bytes / 1048576).toFixed(1)} MB`),
         h("dt", {}, "Components"), h("dd", {}, Object.entries(sys.packages).map(([k, v]) => `${k} ${v}`).join(", "))),
+      h("div", { class: "grid-2", style: "margin-top:14px" },
+        field("Check for updates", updateCheck, "Asks GitHub every few hours whether a newer Buildplate release is out. Nothing about you or your designs is sent.")),
       h("div", { class: "row", style: "margin-top:14px" },
         h("button", { class: "btn", onclick: async () => { const r = await api("/api/system/clear-cache", { method: "POST" }); toast(`Cleared ${r.removed} cached files`); } }, "Clear render cache"),
         h("a", { class: "btn btn-ghost", href: "/api/docs", target: "_blank" }, "REST API reference"))),
     h("div", { class: "save-bar" }, saveState, saveBtn));
 
   await renderConnections(); renderAgent(); renderAccess(); renderPricing(); renderPrinters();
+  checkUpdate();
   if (location.hash.endsWith("#printers") || sessionStorage.getItem("bp-jump") === "printer") {
     sessionStorage.removeItem("bp-jump");
     requestAnimationFrame(() => $("#sec-printer")?.scrollIntoView({ block: "start" }));
@@ -2126,6 +2145,7 @@ async function Settings(root, [flag] = []) {
       Object.assign(draft, structuredClone(app.settings));
       editId = draft.printers.some((x) => x.id === editId) ? editId : draft.active_printer;
       renderAgent(); renderAccess(); renderPrinters();
+      checkUpdate();
     } catch (err) {
       saveBtn.disabled = false;
       toast(err.message, "bad");
