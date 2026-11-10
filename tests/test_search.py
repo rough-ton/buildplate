@@ -239,20 +239,21 @@ def test_api_and_mcp(db, lib):
 
     from app import main, mcp_server
 
-    with TestClient(main.app) as client:
-        r = client.get("/api/designs", params={"q": "garage", "source": "studio"})
-        assert [d["title"] for d in r.json()["designs"]] == ["Garage wall hook"]
-        r = client.get("/api/designs", params={"min_size": 100})
-        assert [d["title"] for d in r.json()["designs"]] == ["Parts box"]
-        assert client.get("/api/designs", params={"q": "size:huge"}).status_code == 400
-        assert client.get("/api/designs/facets").json()["tags"][0] == {"tag": "garage", "count": 2}
-        did = lib["box"]
-        assert client.post(f"/api/designs/{did}/tags", json={"tags": ["Workshop"]}).json()["tags"] == ["storage", "workshop"]
-        assert client.put(f"/api/designs/{did}/tags", json={"tags": ["bins", "shop"]}).json()["tags"] == ["bins", "shop"]
-        assert client.delete(f"/api/designs/{did}/tags/shop").json()["tags"] == ["bins"]
-        assert client.get(f"/api/designs/{did}/tags").json()["tags"] == ["bins"]
-        assert client.get(f"/api/designs/{did}").json()["tags"] == ["bins"]
-        assert client.put("/api/designs/missing/tags", json={"tags": ["x"]}).status_code == 404
+    # no lifespan: the fixture already initialised the db, and the MCP session manager can only start once
+    client = TestClient(main.app)
+    r = client.get("/api/designs", params={"q": "garage", "source": "studio"})
+    assert [d["title"] for d in r.json()["designs"]] == ["Garage wall hook"]
+    r = client.get("/api/designs", params={"min_size": 100})
+    assert [d["title"] for d in r.json()["designs"]] == ["Parts box"]
+    assert client.get("/api/designs", params={"q": "size:huge"}).status_code == 400
+    assert client.get("/api/designs/facets").json()["tags"][0] == {"tag": "garage", "count": 2}
+    did = lib["box"]
+    assert client.post(f"/api/designs/{did}/tags", json={"tags": ["Workshop"]}).json()["tags"] == ["storage", "workshop"]
+    assert client.put(f"/api/designs/{did}/tags", json={"tags": ["bins", "shop"]}).json()["tags"] == ["bins", "shop"]
+    assert client.delete(f"/api/designs/{did}/tags/shop").json()["tags"] == ["bins"]
+    assert client.get(f"/api/designs/{did}/tags").json()["tags"] == ["bins"]
+    assert client.get(f"/api/designs/{did}").json()["tags"] == ["bins"]
+    assert client.put("/api/designs/missing/tags", json={"tags": ["x"]}).status_code == 404
 
     rows = asyncio.run(mcp_server.list_designs(query="tag:garage", model="qwen"))
     assert [r["title"] for r in rows] == ["Garage wall hook"]

@@ -28,6 +28,12 @@ def _url(path: str) -> str:
     return f"{base}{path}" if base else path
 
 
+def _generated_by(v: dict[str, Any]) -> dict[str, Any]:
+    """Who produced a version: origin is agent, manual or mcp, plus provider, model and
+    (for MCP saves) the self-reported client."""
+    return {"origin": v.get("origin"), "provider": v.get("provider"), "model": v.get("model"), "client": v.get("client")}
+
+
 def _links(design_id: str, version: int) -> dict[str, str]:
     return {
         fmt: _url(f"/api/designs/{design_id}/download?format={fmt}&version={version}")
@@ -58,14 +64,28 @@ async def preview(code: str, views: list[str] | None = None) -> Image:
     return Image(data=png, format="png")
 
 
-@mcp.tool(description="Validate and save OpenSCAD code to the Buildplate library. Pass design_id to add a new version to an existing design, and optionally tags to label it. Returns download links.")
+@mcp.tool(
+    description=(
+        "Validate and save OpenSCAD code to the Buildplate library. Pass design_id to add a new version to an "
+        "existing design, and optionally tags to label it. Identify yourself so the library can show who made "
+        "the design: client is the app (e.g. Claude Desktop, Claude Code), model is the model that wrote the "
+        "code (e.g. claude-sonnet-5-5) and provider its vendor (e.g. anthropic). Returns download links."
+    )
+)
 async def save_design(
-    code: str, title: str, summary: str = "", design_id: str | None = None, tags: list[str] | None = None
+    code: str,
+    title: str,
+    summary: str = "",
+    design_id: str | None = None,
+    tags: list[str] | None = None,
+    client: str = "",
+    model: str = "",
+    provider: str = "",
 ) -> dict[str, Any]:
     res, stats = await openscad.validate(code)
     if not design_id or not db.get_design(design_id):
         design_id = db.create_design(title, "mcp")
-    version = db.add_version(design_id, code, summary, stats, None)
+    version = db.add_version(design_id, code, summary, stats, None, "mcp", provider, model, client)
     out_tags = db.add_tags(design_id, tags) if tags else db.get_tags(design_id)
     return {"design_id": design_id, "version": version, "tags": out_tags, "stats": stats, "downloads": _links(design_id, version)}
 
@@ -129,6 +149,7 @@ async def list_designs(
             "summary": d["summary"],
             "tags": d["tags"],
             "source": d["source"],
+            "generated_by": _generated_by(d),
             "models": d["models"],
             "size_mm": d["stats"].get("size_mm"),
             "printer": d["stats"].get("printer"),
@@ -154,7 +175,15 @@ async def get_design(design_id: str, version: int | None = None) -> dict[str, An
     v = db.get_version(design_id, version)
     if not v:
         return {"error": "Design not found"}
-    return {"design_id": design_id, "version": v["version"], "code": v["scad"], "tags": db.get_tags(design_id), "stats": v["stats"], "downloads": _links(design_id, v["version"])}
+    return {
+        "design_id": design_id,
+        "version": v["version"],
+        "code": v["scad"],
+        "tags": db.get_tags(design_id),
+        "generated_by": _generated_by(v),
+        "stats": v["stats"],
+        "downloads": _links(design_id, v["version"]),
+    }
 
 
 @mcp.tool(description="Extract Customizer parameters (name, value, range, options) from OpenSCAD code.")

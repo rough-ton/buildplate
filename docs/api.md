@@ -46,10 +46,10 @@ Event types, in order of appearance:
 
 | Method and path | Description |
 | --- | --- |
-| `GET /api/designs` | Search designs. `q` is free text plus optional qualifiers (see [search syntax](using-studio.md#library-and-search)). Filters: `tags` (comma-separated, all required), `provider`, `model`, `source`, `printer`, `min_size`, `max_size` (largest dimension in mm), `after`, `before` (`YYYY-MM-DD`), `sort` (`relevance`, `updated`, `created`, `title`, `largest`, `smallest`), `limit`. Each design includes `tags` and the `models` that generated it |
+| `GET /api/designs` | Search designs. `q` is free text plus optional qualifiers (see [search syntax](using-studio.md#library-and-search)). Filters: `tags` (comma-separated, all required), `provider`, `model`, `source`, `printer`, `min_size`, `max_size` (largest dimension in mm), `after`, `before` (`YYYY-MM-DD`), `sort` (`relevance`, `updated`, `created`, `title`, `largest`, `smallest`), `limit`. Each design includes `tags`; who made its current version (`origin`: `agent`, `manual` or `mcp`, plus `provider`, `model` and, for MCP saves, `client`); `run` with that version's tokens and cost (null when no Buildplate run produced it); and every `models` entry used across its versions |
 | `GET /api/designs/facets` | Tags, provider/model pairs, sources and printers present in the library, with design counts |
 | `POST /api/designs` | Create from code: `{code, title, tags?}` |
-| `GET /api/designs/{id}` | Design with versions, messages, latest code and parameters |
+| `GET /api/designs/{id}` | Design with versions (each with `origin`, `provider`, `model`, `client` and `run` usage), messages, tags, latest code and parameters |
 | `PATCH /api/designs/{id}` | Rename: `{title}` |
 | `DELETE /api/designs/{id}` | Delete with all versions |
 | `GET /api/designs/{id}/tags` | The design's tags |
