@@ -474,27 +474,54 @@ async function Studio(root, [designId]) {
       }
       wrap.append(row);
     }
-    const changed = Object.keys(s.overrides).length;
-    wrap.append(h("div", { class: "row", style: "margin-top:16px" },
-      h("button", { class: "btn btn-sm", disabled: !changed, onclick: () => { s.overrides = {}; renderParams_(); renderModel(); } }, "Reset"),
-      h("button", { class: "btn btn-sm", disabled: !changed, title: "Write these values into the code as the new defaults", onclick: bakeParams }, "Apply to code")));
+    paramsUi = {
+      reset: h("button", { class: "btn btn-sm", title: "Go back to the values in the code", onclick: () => { s.overrides = {}; saveValuesSoon(); renderParams_(); renderModel(); } }, "Reset"),
+      apply: h("button", { class: "btn btn-sm", title: "Write these values into the code as the new defaults", onclick: bakeParams }, "Apply to code"),
+      note: h("p", { class: "hint", style: "margin-top:8px" }, "Your values are saved with this version and used for downloads. Asking the AI for a change keeps them."),
+    };
+    wrap.append(h("div", { class: "row", style: "margin-top:16px" }, paramsUi.reset, paramsUi.apply), paramsUi.note);
+    syncParamsUi();
     tabBody.append(wrap);
   }
   const renderParams_ = () => { if (s.tab === "params") renderTab(); };
+  let paramsUi = null;
+  function syncParamsUi() {
+    if (!paramsUi) return;
+    const changed = Object.keys(s.overrides).length > 0;
+    paramsUi.reset.disabled = paramsUi.apply.disabled = !changed;
+    paramsUi.note.hidden = !(changed && s.designId);
+  }
 
   const rerender = debounce(() => renderModel(), 300);
   function setParam(p, v) {
     if (v === p.value) delete s.overrides[p.name]; else s.overrides[p.name] = v;
+    syncParamsUi();
+    saveValuesSoon();
     rerender();
   }
 
+  // Tuned values are kept with the version on the server, so they survive leaving
+  // Studio (issue #17). Saved shortly after the last change, and flushed on exit.
+  let saveTimer = null, saveFor = null;
+  function saveValuesSoon() {
+    if (!s.designId || !s.version) return;
+    saveFor = { id: s.designId, version: s.version, values: { ...s.overrides } };
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveValuesNow, 600);
+  }
+  function saveValuesNow() {
+    clearTimeout(saveTimer);
+    const job = saveFor; saveFor = null;
+    if (!job) return;
+    api(`/api/designs/${job.id}/versions/${job.version}/params`, { method: "PUT", json: { values: job.values } })
+      .then(() => { const v = s.versions.find((x) => x.version === job.version); if (v && job.id === s.designId) v.param_values = job.values; })
+      .catch((err) => toast(`Couldn't save parameter values: ${err.message}`, "bad"));
+  }
+
   async function bakeParams() {
-    let code = s.code;
-    for (const [name, v] of Object.entries(s.overrides)) {
-      const lit = typeof v === "string" ? JSON.stringify(v) : typeof v === "boolean" ? String(v) : String(v);
-      code = code.replace(new RegExp(`^(\\s*${name}\\s*=\\s*)([^;]+)(;)`, "m"), `$1${lit}$3`);
-    }
+    const code = bakeCode(s.code, s.overrides);
     s.overrides = {};
+    saveValuesSoon();
     cm.setValue(code);
     s.params = (await api("/api/parameters", { method: "POST", json: { code } })).params;
     toast("Values written into the code. Save a version to keep them.");
@@ -543,9 +570,17 @@ async function Studio(root, [designId]) {
     loadBom();
     setCode(ver.scad, true);
     s.params = ver.params;
-    s.overrides = {};
+    s.overrides = { ...(ver.param_values || {}) };
     renderTab();
     renderModel();
+  }
+
+  // The code the AI should change: unsaved edits, plus any tuned parameter values
+  // written in as defaults so the next version keeps them. null = the saved version.
+  function codeForAI() {
+    if (!s.code) return null;
+    const code = Object.keys(s.overrides).length ? bakeCode(s.code, s.overrides) : s.code;
+    return code !== s.savedCode ? code : null;
   }
 
   function setCode(code, saved = false) {
@@ -709,7 +744,7 @@ async function Studio(root, [designId]) {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, design_id: s.designId, code: s.code && s.code !== s.savedCode ? s.code : null, connection, model, hardware_mode: hwSel.value }),
+        body: JSON.stringify({ prompt: text, design_id: s.designId, code: codeForAI(), connection, model, hardware_mode: hwSel.value }),
         signal: s.abort.signal,
       });
       if (res.status === 401) { showLogin(); return; }
@@ -800,6 +835,7 @@ async function Studio(root, [designId]) {
     if (full) {
       setCode(d.code, true);
       s.params = d.params;
+      s.overrides = { ...(d.param_values || {}) };
       chat.innerHTML = "";
       if (!d.messages.length) intro();
       const runs = d.messages.length ? (await api("/api/usage/runs?limit=500")).runs.filter((r) => r.design_id === s.designId) : [];
@@ -825,7 +861,17 @@ async function Studio(root, [designId]) {
   updateSessionMeter();
   setTimeout(() => prompt.focus(), 0);
 
-  return () => { s.abort?.abort(); viewer.dispose(); };
+  return () => { saveValuesNow(); s.abort?.abort(); viewer.dispose(); };
+}
+
+// Write parameter values into OpenSCAD code as the new defaults (`name = value;` lines).
+function bakeCode(code, values) {
+  for (const [name, v] of Object.entries(values)) {
+    const lit = typeof v === "string" ? JSON.stringify(v) : String(v);
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    code = code.replace(new RegExp(`^(\\s*${esc}\\s*=\\s*)([^;]+)(;)`, "m"), (_, a, _b, c) => a + lit + c);
+  }
+  return code;
 }
 
 function slug(t) { return (t || "design").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "design"; }

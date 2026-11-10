@@ -138,7 +138,9 @@ _ADDED_COLUMNS = {
     "run_steps": {"est_cost_usd": "REAL"},
     # parts used by the version (JSON list), the hardware mode it was made with, the
     # agent's note when hardware was unavoidable, and what "mark as built" took
-    "versions": {"bom": "TEXT", "hardware_mode": "TEXT", "hardware_note": "TEXT", "built": "TEXT"},
+    "versions": {"bom": "TEXT", "hardware_mode": "TEXT", "hardware_note": "TEXT", "built": "TEXT",
+                 # parameter values tuned in Studio (JSON {name: value}), kept with the version
+                 "param_values": "TEXT"},
 }
 
 # Bump when the search index layout or contents change; existing databases are
@@ -336,6 +338,16 @@ def set_version_hardware(design_id: str, version: int, bom: list[dict[str, Any]]
             "UPDATE versions SET bom=?, hardware_mode=?, hardware_note=? WHERE design_id=? AND version=?",
             (json.dumps(bom) if bom else None, mode, note or None, design_id, version),
         )
+
+
+def set_param_values(design_id: str, version: int, values: dict[str, Any] | None) -> bool:
+    """Keep the parameter values tuned for a version. Empty clears them. False if no such version."""
+    with tx() as c:
+        cur = c.execute(
+            "UPDATE versions SET param_values=? WHERE design_id=? AND version=?",
+            (json.dumps(values) if values else None, design_id, version),
+        )
+        return cur.rowcount > 0
 
 
 def latest_hardware_mode(design_id: str | None) -> str | None:
@@ -537,7 +549,7 @@ def get_design(design_id: str) -> dict[str, Any] | None:
         design["versions"] = _rows(
             c.execute(
                 "SELECT v.version, v.summary, v.stats, v.created_at, v.origin, v.provider, v.model, v.client, "
-                "v.bom, v.hardware_mode, v.hardware_note, v.built, "
+                "v.bom, v.hardware_mode, v.hardware_note, v.built, v.param_values, "
                 "r.id AS run_id, r.input_tokens, r.output_tokens, r.cost_usd, r.cost_known "
                 "FROM versions v LEFT JOIN runs r ON r.id=v.run_id WHERE v.design_id=? ORDER BY v.version",
                 (design_id,),
