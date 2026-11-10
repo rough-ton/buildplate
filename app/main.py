@@ -22,9 +22,10 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
-from . import agent, auth, auth_methods, claude_code, claude_runtime, config, connections, db, openscad, parts, printers, search, terminal, updates
+from . import agent, auth, auth_methods, claude_code, claude_runtime, config, connections, db, openscad, parts, printers, search, terminal
 from .mcp_server import mcp
 from .settings import public_connection, store
+from . import updates
 
 mcp_app = mcp.streamable_http_app(
     streamable_http_path="/mcp",
