@@ -153,23 +153,30 @@ Buildplate's render-and-check tools. See [Security](docs/security.md).
 
 | Library | Usage |
 | --- | --- |
-| <img src="assets/screenshots/library.png" alt="Library of saved designs" width="440"> | <img src="assets/screenshots/usage.png" alt="Token usage dashboard" width="440"> |
+| <img src="assets/screenshots/library.png" alt="Library of saved designs with thumbnails, tags and the model that made each one" width="440"> | <img src="assets/screenshots/usage.png" alt="Usage page with token totals, pay-per-use cost, Claude plan usage and plan limit meters" width="440"> |
 
-| Printer catalog | Dark mode |
+| AI connections | Printer catalog |
 | --- | --- |
-| <img src="assets/screenshots/printers.png" alt="Add printers dialog with manufacturers and nozzle sizes" width="440"> | <img src="assets/screenshots/studio-dark.png" alt="Studio in dark mode" width="440"> |
+| <img src="assets/screenshots/settings.png" alt="AI connections: a Claude plan, a Claude API key and a local Ollama server" width="440"> | <img src="assets/screenshots/printers.png" alt="Add printers dialog with manufacturers and nozzle sizes" width="440"> |
+
+| Dark mode | |
+| --- | --- |
+| <img src="assets/screenshots/studio-dark.png" alt="Studio in dark mode with a headphone stand" width="440"> | |
 
 ## Support
 
-Buildplate is free and open source. If it saves you time at the printer, you can support
-its development:
+Buildplate is an open-source project by Mike Roughton ([about.mroughton.com](https://about.mroughton.com)),
+released under the MIT license. If you like this project and it saves you time at the printer,
+please consider supporting its development with a coffee.
 
 <a href="https://www.buymeacoffee.com/mikeroughton" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="60" width="217"></a>
 
 ## Contributing
 
 Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers running
-from source, tests and the release process.
+from source, tests and the release process. To report a security problem, use
+[private vulnerability reporting](https://github.com/rough-ton/buildplate/security/advisories/new)
+instead of opening a public issue.
 
 ## License
 

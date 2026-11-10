@@ -219,7 +219,7 @@ label { display: block; font-weight: 500; margin-bottom: 4px; }
 .composer-foot select { height: 30px; font-size: 12.5px; width: auto; max-width: 190px; }
 
 .stage { position: relative; background: var(--viewer-bg); display: flex; flex-direction: column; }
-.stage-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: color-mix(in srgb, var(--viewer-bg) 70%, transparent); position: absolute; inset: 0 0 auto 0; z-index: 2; flex-wrap: wrap; }
+.stage-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: color-mix(in srgb, var(--viewer-bg) 70%, transparent); position: absolute; inset: 0 0 auto 0; z-index: 2; flex-wrap: nowrap; }
 .viewer { flex: 1; position: relative; }
 .viewer canvas { display: block; width: 100% !important; height: 100% !important; }
 .viewer-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--ink-3); pointer-events: none; padding: 24px; }
@@ -417,6 +417,7 @@ table.data .prompt { max-width: 340px; overflow: hidden; text-overflow: ellipsis
   .save-bar { margin: 0 -16px; }
   .kv { grid-template-columns: 1fr; }
   .provider-body { grid-template-columns: 1fr; }
+  .stage-bar { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
@@ -434,7 +435,7 @@ table.data .prompt { max-width: 340px; overflow: hidden; text-overflow: ellipsis
 .pcard-dims { color: var(--ink-2); font-size: 12.5px; }
 .printer-editor { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
 .printer-add { margin-top: 14px; }
-.printer-select { width: auto; height: 28px; font-size: 12.5px; padding: 0 8px; max-width: 280px; background: var(--panel); }
+.printer-select { width: auto; height: 28px; font-size: 12.5px; padding: 0 8px; min-width: 96px; max-width: 280px; text-overflow: ellipsis; background: var(--panel); }
 
 /* ---------- printer picker ---------- */
 dialog.pp { width: min(1080px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); box-shadow: 0 24px 64px rgba(0,0,0,.25); display: flex; flex-direction: column; overflow: hidden; }
@@ -485,7 +486,9 @@ dialog.pp::backdrop { background: rgba(19, 24, 30, .45); }
   .pp-art { height: 92px; }
   .pp-illo .printer-icon { width: 96px; height: 74px; }
 }
-.printer-chip { display: inline-flex; align-items: center; gap: 8px; }
+.printer-chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; }
+.printer-chip .printer-select { flex: 0 1 auto; }
+.stage-bar > .seg, .stage-bar > .btn { flex: none; }
 
 /* ---------- Claude Code sign-in terminal ---------- */
 dialog.pp.term { width: min(900px, calc(100vw - 32px)); height: fit-content; max-height: calc(100vh - 32px); }
