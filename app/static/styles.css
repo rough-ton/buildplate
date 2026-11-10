@@ -529,3 +529,10 @@ dialog.pp.term { width: min(900px, calc(100vw - 32px)); height: fit-content; max
 .about-text { flex: 1; min-width: 240px; }
 .about-text p { margin: 0 0 8px; color: var(--ink-2); max-width: 60ch; }
 .about-sub { font-size: 14px; font-weight: 600; margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* ---------- password form ---------- */
+.pw-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; align-items: end; }
+.pw-row label { white-space: nowrap; }
+.pw-action .btn { width: 100%; }
+.pw-form .hint { margin-top: 8px; }
+@media (min-width: 821px) { .pw-action .btn { width: auto; } }
