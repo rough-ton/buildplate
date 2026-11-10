@@ -118,10 +118,13 @@ Settings files from before connections existed are converted automatically on fi
 ├── designs/           reserved for exports
 ├── libraries/         your own OpenSCAD libraries
 ├── tools/claude-code/ Claude Code, installed when you add a Claude plan connection
-└── claude-code/       Claude Code's own folder per Claude plan connection, including its sign-in
+├── tools/copilot/     GitHub's Copilot runtime, downloaded when you add a Copilot plan connection
+├── claude-code/       Claude Code's own folder per Claude plan connection, including its sign-in
+├── chatgpt/           ChatGPT plan sign-ins (encrypted)
+└── copilot/           Copilot runtime state per Copilot plan connection (no credentials)
 ```
 
-Backups of the data folder include Claude plan sign-ins. Treat them like the credentials they are.
+Backups of the data folder include Claude and ChatGPT plan sign-ins, and `settings.json` holds the encrypted keys and tokens for other connections. Treat them like the credentials they are.
 
 To ship Claude Code inside the image instead of downloading it on first use, build with `docker build --build-arg CLAUDE_CODE_VERSION=2.1.311 .`. Environment variables such as `ANTHROPIC_API_KEY` are never passed to Claude Code, so they cannot change how a Claude plan request is billed.
 

@@ -238,6 +238,13 @@ async def run(
                 target.id, run_id, model, system_prompt(vision, mode), _prompt_text(design_id, current_code, prompt),
                 vision, a["max_iterations"], state, mode,
             )
+        elif method.runtime == "sdk:copilot":
+            from . import copilot
+
+            loop = copilot.design_loop(
+                target.id, connections.values(target.connection)["token"], run_id, model, system_prompt(vision, mode),
+                _prompt_text(design_id, current_code, prompt), vision, a["max_iterations"], state, mode,
+            )
         else:
             loop = _litellm_loop(target, run_id, design_id, current_code, prompt, vision, state, mode)
         async for ev in loop:

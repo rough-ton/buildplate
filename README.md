@@ -23,7 +23,7 @@ Buildplate is a self-hosted AI design studio for 3D printing. Describe what you 
 writes parametric OpenSCAD, renders it, checks the mesh against your printer, looks at the
 result, fixes what is wrong and puts a ready-to-slice STL or 3MF on your build plate. It runs
 as a single Docker container and works with the AI you already use: an API key, a local
-model, or your Claude or ChatGPT plan.
+model, or your Claude, ChatGPT or Copilot plan.
 
 ![Buildplate Studio with a generated part on the build plate, its parameters and the chat that produced it](assets/screenshots/studio.png)
 
@@ -39,11 +39,11 @@ model, or your Claude or ChatGPT plan.
   Groq, DeepSeek, Ollama, LM Studio, vLLM and other OpenAI-compatible servers, or your own cloud
   account on Amazon Bedrock, Google Vertex AI, Azure OpenAI or Microsoft Foundry. Add several
   connections per provider and switch models per request.
-- **Use your Claude or ChatGPT plan.** Design with your Claude Pro, Max, Team or Enterprise
+- **Use your Claude, ChatGPT or Copilot plan.** Design with your Claude Pro, Max, Team or Enterprise
   plan instead of an API key. Buildplate runs Claude Code, Anthropic's own app, and you sign in
   through Claude Code's own login; Buildplate never sees your Claude credentials. ChatGPT Plus
   and Pro plans connect through OpenAI's Sign in with ChatGPT, with a usage limit you set in
-  ChatGPT.
+  ChatGPT. GitHub Copilot plans connect through GitHub's Copilot SDK with a fine-grained token.
 - **Every major printer.** A catalog of 400+ printers from about 70 manufacturers, with
   the nozzle sizes you use. The plate, checks and design limits follow the printer you
   pick, including round beds for deltas.
@@ -106,7 +106,7 @@ library database are migrated automatically on first start.
 2. Set a password in **Settings > Access and MCP**. Buildplate asks for one before you add
    AI connections, because they hold credentials.
 3. In **Settings > AI connections**, add an API key, point Buildplate at Ollama, or sign in
-   with your Claude or ChatGPT plan.
+   with your Claude, ChatGPT or Copilot plan.
 4. Pick your printer from the catalog, then describe your first part in **Studio**.
 
 The [Getting started](docs/getting-started.md) guide walks through each step.
@@ -118,7 +118,7 @@ The same guides are built into the app under **Docs**.
 | Guide | What it covers |
 | --- | --- |
 | [Getting started](docs/getting-started.md) | Install, first run, first design |
-| [AI connections](docs/providers.md) | Connecting each provider, your Claude or ChatGPT plan, choosing models, local models |
+| [AI connections](docs/providers.md) | Connecting each provider, your Claude, ChatGPT or Copilot plan, choosing models, local models |
 | [Subscription sign-in](docs/provider-rules.md) | Which AI subscriptions can be used and why some cannot |
 | [Using Studio](docs/using-studio.md) | Prompting, parameters, code editing, versions, tags, Library search, exports |
 | [Parts inventory](docs/parts.md) | Your hardware on hand, designs that use it, parts lists and buy links |
