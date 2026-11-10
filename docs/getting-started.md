@@ -35,22 +35,24 @@ On Unraid, follow the [Unraid guide](./unraid.md) instead.
 
 Browse to `http://<your-host>:8080`. The Studio opens with an empty build plate.
 
-If the address is reachable by anyone else on your network, set a password first: **Settings > Access and MCP > Web interface password**.
+## 3. Set a password
 
-## 3. Connect an AI provider
+Go to **Settings > Access and MCP** and set a **Web interface password**. Buildplate asks for one before you add AI connections, because they hold credentials. You can also set `BUILDPLATE_ADMIN_PASSWORD` before the first start.
 
-1. Go to **Settings > AI providers**.
-2. Paste an API key into one provider, or enter your Ollama address.
-3. Select **Connect**. Buildplate tests the key, lists the models you can use, and turns the provider on.
-4. Under **Design agent**, pick the default model.
+## 4. Connect an AI model
 
-You do not need to restart anything. See [AI providers](./providers.md) for model recommendations.
+1. Go to **Settings > AI connections**.
+2. Under **Add a connection**, choose a provider, then paste an API key or enter your Ollama address.
+3. Select **Connect**. Buildplate saves the connection, lists the models you can use, and makes the first one the default.
+4. Under **Design agent**, change the default model if you like.
 
-## 4. Add your printers
+You do not need to restart anything. See [AI connections](./providers.md) for model recommendations.
+
+## 5. Add your printers
 
 Under **Settings > Printers**, select **Add printers**. Choose your printer's manufacturer, then the nozzle sizes you use, and select **Add**. The catalog covers over 400 printers; use **Add custom printer** for anything else. Adjust the nozzle diameter and the clearance you use for parts that fit together. Add a profile for each printer you own; the menu above the viewer in Studio switches between them. The agent designs to the active printer, and the viewer draws its build plate.
 
-## 5. Make something
+## 6. Make something
 
 Back in **Studio**, describe a part. Be specific about what matters:
 

@@ -23,13 +23,18 @@ def sf(tmp_path, monkeypatch):
 
 
 def test_secrets_are_encrypted_and_masked(sf):
+    from app import connections
+
+    importlib.reload(connections)
     store = sf["settings"].store
-    store.update({"providers": {"openai": {"api_key": "sk-test-abcdefgh1234", "enabled": True}}})
+    c = connections.create("openai.api_key", "OpenAI", {"api_key": "sk-test-abcdefgh1234"})
     raw = sf["config"].SETTINGS_FILE.read_text()
     assert "sk-test-abcdefgh1234" not in raw
-    assert store.get()["providers"]["openai"]["api_key"] == "sk-test-abcdefgh1234"
-    pub = store.public()["providers"]["openai"]
-    assert "api_key" not in pub and pub["api_key_hint"] == "****1234"
+    assert connections.get(c["id"])["secrets"]["api_key"] == "sk-test-abcdefgh1234"
+    pub = store.public()
+    assert "sk-test-abcdefgh1234" not in json.dumps(pub)
+    assert pub["connections"][0]["secrets"]["api_key"] == {"set": True, "hint": "****1234"}
+    assert pub["providers"]["openai"]["api_key_hint"] == "****1234"
 
 
 def test_settings_apply_without_restart(sf):

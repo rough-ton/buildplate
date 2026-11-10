@@ -11,11 +11,11 @@ The endpoint uses the Streamable HTTP transport.
 | `check_design` | Renders code, validates the mesh for printing, returns a report and a four-view preview image |
 | `preview` | Renders a PNG from one or more views: `iso`, `front`, `right`, `top`, `back_iso` |
 | `save_design` | Validates and saves code to the library (as a new design, or a new version of `design_id`), returns STL, 3MF and SCAD links |
-| `generate_design` | Runs Buildplate's own design agent with the model configured in Settings, tracking tokens in Buildplate |
+| `generate_design` | Runs Buildplate's own design agent with the default connection and model, or the `connection` and `model` given, tracking tokens in Buildplate |
 | `list_designs` | Lists saved designs, with optional title search |
 | `get_design` | Returns the code and stats of a saved design |
 | `get_parameters` | Extracts Customizer parameters from code |
-| `environment` | Returns the active printer, all saved printer profiles, available libraries and the OpenSCAD version |
+| `environment` | Returns the active printer, all saved printer profiles, the AI connections and their models (no credentials), available libraries and the OpenSCAD version |
 | `set_printer` | Switches the active printer profile by id |
 | `find_printers` | Searches the printer catalog by name |
 | `add_printer` | Adds a catalog printer with a nozzle size as a profile, optionally making it active |

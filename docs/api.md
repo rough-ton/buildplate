@@ -17,13 +17,13 @@ curl -N http://localhost:8080/api/generate \
   -d '{"prompt": "A 40 mm cable clip for a 6 mm cable"}'
 ```
 
-Body fields: `prompt` (required), `design_id` (to modify an existing design), `code` (start from this code instead of the saved version), `provider` and `model` (override the default).
+Body fields: `prompt` (required), `design_id` (to modify an existing design), `code` (start from this code instead of the saved version), `connection` (a connection id from `GET /api/connections`) and `model` (override the default). The older `provider` field (a provider family such as `anthropic`) still works and picks the first enabled connection of that family.
 
 Event types, in order of appearance:
 
 | Type | Fields |
 | --- | --- |
-| `run` | `run_id`, `provider`, `model`, `vision` |
+| `run` | `run_id`, `provider` (family), `model`, `vision`, `connection`, `connection_label`, `billing` |
 | `status` | `message` |
 | `usage` | `step`, `usage` (this call), `totals` (so far) |
 | `assistant` | `text` |
@@ -73,7 +73,12 @@ Event types, in order of appearance:
 | `GET /api/printers/catalog` | The printer catalog: manufacturers and printers with build volume, bed shape and nozzle sizes |
 | `POST /api/printers/add` | Add catalog printers as profiles: `{items: [{key, nozzle}], activate?}` |
 | `POST /api/printers/active` | Switch the active printer: `{id}` |
-| `POST /api/providers/{id}/models` | Test a provider and save its model list: `{api_key?, base_url?}` |
+| `GET /api/auth-methods` | Every connection method with its field schema (which fields are secret), billing type and runtime |
+| `GET /api/connections` | Connections with credentials masked (`{set, hint}`), the default connection, and `editable` (whether this request may change them) |
+| `POST /api/connections` | Add a connection: `{method, label?, values: {field: value}, enabled?}`. Needs a password session or a request from the server itself |
+| `PATCH /api/connections/{id}` | Change `label`, `enabled` or `values`. A secret given as `""` is cleared; one left out is kept. Same access rule |
+| `DELETE /api/connections/{id}` | Remove a connection and its credentials. Same access rule |
+| `POST /api/connections/{id}/test` | Test, save and return the model list. Same access rule |
 | `POST /api/settings/password` | `{current, new}`; an empty `new` removes the password |
 | `POST /api/settings/mcp-token` | Generate a new MCP token (returned once) |
 | `DELETE /api/settings/mcp-token` | Remove the MCP token |

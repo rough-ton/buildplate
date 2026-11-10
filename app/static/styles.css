@@ -159,6 +159,7 @@ label { display: block; font-weight: 500; margin-bottom: 4px; }
 .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
 .switch input:checked { background: var(--accent); }
 .switch input:checked::after { transform: translateX(14px); }
+.switch input:disabled { opacity: .45; cursor: not-allowed; }
 
 .pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: var(--sunken); color: var(--ink-2); border: 1px solid var(--line); white-space: nowrap; }
 .pill.good { color: var(--good); }
@@ -319,6 +320,13 @@ table.data .prompt { max-width: 340px; overflow: hidden; text-overflow: ellipsis
 .provider-head h3 { margin: 0; font-size: 14.5px; font-weight: 600; }
 .provider-body { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
 .provider-body .full { grid-column: 1 / -1; }
+.conn-title { display: flex; flex-direction: column; min-width: 0; }
+.conn-status { margin: 6px 0 0 44px; }
+.conn-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin-top: 12px; }
+.conn-fields .full { grid-column: 1 / -1; }
+.conn-add { border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: 14px 16px; margin-top: 12px; }
+.conn-add h3 { margin: 0; font-size: 14.5px; font-weight: 600; }
+@media (max-width: 720px) { .conn-fields { grid-template-columns: 1fr; } .conn-status { margin-left: 0; } .provider-head { flex-wrap: wrap; } }
 .secret-row { display: flex; gap: 8px; }
 .token-reveal { font-family: var(--mono); background: var(--sunken); border: 1px dashed var(--line-strong); padding: 10px 12px; border-radius: var(--radius-sm); word-break: break-all; }
 .save-bar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; justify-content: flex-end; padding: 12px 20px; background: color-mix(in srgb, var(--plate) 88%, transparent); backdrop-filter: blur(6px); border-top: 1px solid var(--line); margin: 0 -32px; }
