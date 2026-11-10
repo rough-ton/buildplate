@@ -76,6 +76,10 @@ The **Checks** tab shows the size, volume, an estimated PLA weight, whether the 
 
 Every generation and every saved edit is a version. Each version shows what made it: the provider and model for AI generations, **Manual edit** for code you saved yourself, or the MCP client and model for designs saved from an external app. Open one from the **History** tab to load its code and model. Saving after that creates a new version; nothing is overwritten.
 
+## Hardware
+
+The **Hardware** menu under the prompt decides how a request handles screws, inserts, magnets and other hardware: ask me, use parts I have, buy parts as needed, or no hardware. The **Parts** tab next to the viewer lists the parts the design uses, what you have, and where to buy the rest. See [Parts inventory](parts.md).
+
 ## Tags
 
 Tags sit under the design title. Type a tag and press Enter (or a comma) to add it, select the x on a tag to remove it, or press Backspace in the empty box to remove the last one. When the agent saves a design that has no tags yet, it suggests a few; after that, it leaves your tags alone.

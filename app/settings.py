@@ -17,6 +17,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import threading
 from typing import Any
@@ -85,6 +86,7 @@ DEFAULTS: dict[str, Any] = {
         "temperature": 0.2,
         "max_output_tokens": 8192,
         "vision": "auto",  # auto | on | off
+        "hardware_mode": "ask",  # ask | inventory | order | none (see parts.py)
         "preview_size": 768,
         "extra_instructions": "",
     },
@@ -103,6 +105,9 @@ DEFAULTS: dict[str, Any] = {
         "session_hours": 168,
     },
     "pricing": {"overrides": {}},
+    # Where buy links for parts point: Bambu Lab Store region, Amazon site and an
+    # optional Amazon associate tag added to Amazon links.
+    "parts": {"store_region": "us", "amazon_domain": "amazon.com", "amazon_tag": ""},
     "server": {"public_url": ""},
 }
 
@@ -457,6 +462,19 @@ def _validate(s: dict[str, Any]) -> None:
     a.pop("provider", None)
     if a.get("connection") and a["connection"] not in {c["id"] for c in s["connections"]}:
         raise ValueError("Unknown connection for the design agent")
+    if a.get("hardware_mode") not in ("ask", "inventory", "order", "none"):
+        a["hardware_mode"] = "ask"
+    pt = s.setdefault("parts", {})
+    from .parts import AMAZON_DOMAINS, STORE_REGIONS
+
+    if pt.get("store_region") not in STORE_REGIONS:
+        pt["store_region"] = "us"
+    if pt.get("amazon_domain") not in AMAZON_DOMAINS:
+        pt["amazon_domain"] = "amazon.com"
+    tag = str(pt.get("amazon_tag") or "").strip()
+    if tag and not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", tag):
+        raise ValueError("The Amazon associate tag can only contain letters, numbers, - and _.")
+    pt["amazon_tag"] = tag
     r = s["render"]
     r["timeout"] = max(10, min(int(r["timeout"]), 1800))
     r["max_parallel"] = max(1, min(int(r["max_parallel"]), 16))

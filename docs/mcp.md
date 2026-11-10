@@ -11,10 +11,13 @@ The endpoint uses the Streamable HTTP transport.
 | `check_design` | Renders code, validates the mesh for printing, returns a report and a four-view preview image |
 | `preview` | Renders a PNG from one or more views: `iso`, `front`, `right`, `top`, `back_iso` |
 | `save_design` | Validates and saves code to the library (as a new design, or a new version of `design_id`), optionally with `tags`. Pass `client`, `model` and `provider` so the Library can show what made the design. Returns STL, 3MF and SCAD links |
-| `generate_design` | Runs Buildplate's own design agent with the default connection and model, or the `connection` and `model` given, tracking tokens in Buildplate |
+| `generate_design` | Runs Buildplate's own design agent with the default connection and model, or the `connection` and `model` given, tracking tokens in Buildplate. `hardware_mode` sets how hardware is handled; the result includes the bill of materials |
 | `list_designs` | Searches saved designs by title, description, tags, prompt, provider and model, with filters for tags, provider, model, source, printer, size and date. Accepts the same [search syntax](using-studio.md#library-and-search) as the Library |
 | `set_design_tags` | Replaces the tags on a saved design |
-| `get_design` | Returns the code, tags, stats and `generated_by` (origin, provider, model, client) of a saved design |
+| `get_design` | Returns the code, tags, stats, bill of materials and `generated_by` (origin, provider, model, client) of a saved design |
+| `list_parts` | Lists the parts inventory (and optionally the catalog) with hole sizes and buy links |
+| `add_part` | Adds a catalog or custom part to the inventory |
+| `update_part_quantity` | Sets or changes a part's quantity on hand |
 | `get_parameters` | Extracts Customizer parameters from code |
 | `environment` | Returns the active printer, all saved printer profiles, the AI connections and their models (no credentials), available libraries and the OpenSCAD version |
 | `set_printer` | Switches the active printer profile by id |

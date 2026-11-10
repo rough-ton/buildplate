@@ -1,0 +1,2409 @@
+{
+ "version": 1,
+ "categories": [
+  "PTFE tube",
+  "bearing",
+  "belt",
+  "heat-set insert",
+  "magnet",
+  "nut",
+  "rod",
+  "rubber foot",
+  "screw",
+  "spring",
+  "standoff",
+  "washer"
+ ],
+ "parts": [
+  {
+   "key": "screw-shcs-m2x4",
+   "category": "screw",
+   "name": "M2 x 4 socket head cap screw",
+   "size": "M2 x 4",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.0,
+    "length": 4,
+    "head_d": 3.8,
+    "head_h": 2.0
+   },
+   "holes": {
+    "clearance_d": 2.4,
+    "pilot_in_plastic_d": 1.8,
+    "min_thread_engagement": 3.0,
+    "counterbore_d": 4.4,
+    "counterbore_depth": 2.2
+   },
+   "search": "M2x4 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m2x6",
+   "category": "screw",
+   "name": "M2 x 6 socket head cap screw",
+   "size": "M2 x 6",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.0,
+    "length": 6,
+    "head_d": 3.8,
+    "head_h": 2.0
+   },
+   "holes": {
+    "clearance_d": 2.4,
+    "pilot_in_plastic_d": 1.8,
+    "min_thread_engagement": 3.0,
+    "counterbore_d": 4.4,
+    "counterbore_depth": 2.2
+   },
+   "search": "M2x6 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m2x8",
+   "category": "screw",
+   "name": "M2 x 8 socket head cap screw",
+   "size": "M2 x 8",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.0,
+    "length": 8,
+    "head_d": 3.8,
+    "head_h": 2.0
+   },
+   "holes": {
+    "clearance_d": 2.4,
+    "pilot_in_plastic_d": 1.8,
+    "min_thread_engagement": 3.0,
+    "counterbore_d": 4.4,
+    "counterbore_depth": 2.2
+   },
+   "search": "M2x8 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m2x10",
+   "category": "screw",
+   "name": "M2 x 10 socket head cap screw",
+   "size": "M2 x 10",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.0,
+    "length": 10,
+    "head_d": 3.8,
+    "head_h": 2.0
+   },
+   "holes": {
+    "clearance_d": 2.4,
+    "pilot_in_plastic_d": 1.8,
+    "min_thread_engagement": 3.0,
+    "counterbore_d": 4.4,
+    "counterbore_depth": 2.2
+   },
+   "search": "M2x10 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m2x6",
+   "category": "screw",
+   "name": "M2 x 6 countersunk flat head screw",
+   "size": "M2 x 6",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.0,
+    "length": 6,
+    "head_d": 4.4,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 2.4,
+    "pilot_in_plastic_d": 1.8,
+    "min_thread_engagement": 3.0,
+    "countersink_d": 4.8,
+    "countersink_angle": 90
+   },
+   "search": "M2x6 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m2x8",
+   "category": "screw",
+   "name": "M2 x 8 countersunk flat head screw",
+   "size": "M2 x 8",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.0,
+    "length": 8,
+    "head_d": 4.4,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 2.4,
+    "pilot_in_plastic_d": 1.8,
+    "min_thread_engagement": 3.0,
+    "countersink_d": 4.8,
+    "countersink_angle": 90
+   },
+   "search": "M2x8 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m2x10",
+   "category": "screw",
+   "name": "M2 x 10 countersunk flat head screw",
+   "size": "M2 x 10",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.0,
+    "length": 10,
+    "head_d": 4.4,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 2.4,
+    "pilot_in_plastic_d": 1.8,
+    "min_thread_engagement": 3.0,
+    "countersink_d": 4.8,
+    "countersink_angle": 90
+   },
+   "search": "M2x10 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-shcs-m2.5x6",
+   "category": "screw",
+   "name": "M2.5 x 6 socket head cap screw",
+   "size": "M2.5 x 6",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 6,
+    "head_d": 4.5,
+    "head_h": 2.5
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "counterbore_d": 5.1,
+    "counterbore_depth": 2.7
+   },
+   "search": "M2.5x6 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m2.5x8",
+   "category": "screw",
+   "name": "M2.5 x 8 socket head cap screw",
+   "size": "M2.5 x 8",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 8,
+    "head_d": 4.5,
+    "head_h": 2.5
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "counterbore_d": 5.1,
+    "counterbore_depth": 2.7
+   },
+   "search": "M2.5x8 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m2.5x10",
+   "category": "screw",
+   "name": "M2.5 x 10 socket head cap screw",
+   "size": "M2.5 x 10",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 10,
+    "head_d": 4.5,
+    "head_h": 2.5
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "counterbore_d": 5.1,
+    "counterbore_depth": 2.7
+   },
+   "search": "M2.5x10 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m2.5x12",
+   "category": "screw",
+   "name": "M2.5 x 12 socket head cap screw",
+   "size": "M2.5 x 12",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 12,
+    "head_d": 4.5,
+    "head_h": 2.5
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "counterbore_d": 5.1,
+    "counterbore_depth": 2.7
+   },
+   "search": "M2.5x12 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m2.5x6",
+   "category": "screw",
+   "name": "M2.5 x 6 button head socket screw",
+   "size": "M2.5 x 6",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 6,
+    "head_d": 4.7,
+    "head_h": 1.5
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "counterbore_d": 5.3,
+    "counterbore_depth": 1.7
+   },
+   "search": "M2.5x6 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m2.5x8",
+   "category": "screw",
+   "name": "M2.5 x 8 button head socket screw",
+   "size": "M2.5 x 8",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 8,
+    "head_d": 4.7,
+    "head_h": 1.5
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "counterbore_d": 5.3,
+    "counterbore_depth": 1.7
+   },
+   "search": "M2.5x8 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m2.5x10",
+   "category": "screw",
+   "name": "M2.5 x 10 button head socket screw",
+   "size": "M2.5 x 10",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 10,
+    "head_d": 4.7,
+    "head_h": 1.5
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "counterbore_d": 5.3,
+    "counterbore_depth": 1.7
+   },
+   "search": "M2.5x10 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m2.5x12",
+   "category": "screw",
+   "name": "M2.5 x 12 button head socket screw",
+   "size": "M2.5 x 12",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 12,
+    "head_d": 4.7,
+    "head_h": 1.5
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "counterbore_d": 5.3,
+    "counterbore_depth": 1.7
+   },
+   "search": "M2.5x12 button head socket screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m2.5x6",
+   "category": "screw",
+   "name": "M2.5 x 6 countersunk flat head screw",
+   "size": "M2.5 x 6",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 6,
+    "head_d": 5.5,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "countersink_d": 5.9,
+    "countersink_angle": 90
+   },
+   "search": "M2.5x6 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m2.5x8",
+   "category": "screw",
+   "name": "M2.5 x 8 countersunk flat head screw",
+   "size": "M2.5 x 8",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 8,
+    "head_d": 5.5,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "countersink_d": 5.9,
+    "countersink_angle": 90
+   },
+   "search": "M2.5x8 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m2.5x10",
+   "category": "screw",
+   "name": "M2.5 x 10 countersunk flat head screw",
+   "size": "M2.5 x 10",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 10,
+    "head_d": 5.5,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "countersink_d": 5.9,
+    "countersink_angle": 90
+   },
+   "search": "M2.5x10 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m2.5x12",
+   "category": "screw",
+   "name": "M2.5 x 12 countersunk flat head screw",
+   "size": "M2.5 x 12",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 12,
+    "head_d": 5.5,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 2.9,
+    "pilot_in_plastic_d": 2.2,
+    "min_thread_engagement": 3.75,
+    "countersink_d": 5.9,
+    "countersink_angle": 90
+   },
+   "search": "M2.5x12 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-shcs-m3x6",
+   "category": "screw",
+   "name": "M3 x 6 socket head cap screw",
+   "size": "M3 x 6",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 6,
+    "head_d": 5.5,
+    "head_h": 3.0
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.1,
+    "counterbore_depth": 3.2
+   },
+   "search": "M3x6 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m3x8",
+   "category": "screw",
+   "name": "M3 x 8 socket head cap screw",
+   "size": "M3 x 8",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 8,
+    "head_d": 5.5,
+    "head_h": 3.0
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.1,
+    "counterbore_depth": 3.2
+   },
+   "search": "M3x8 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m3x10",
+   "category": "screw",
+   "name": "M3 x 10 socket head cap screw",
+   "size": "M3 x 10",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 10,
+    "head_d": 5.5,
+    "head_h": 3.0
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.1,
+    "counterbore_depth": 3.2
+   },
+   "search": "M3x10 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m3x12",
+   "category": "screw",
+   "name": "M3 x 12 socket head cap screw",
+   "size": "M3 x 12",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 12,
+    "head_d": 5.5,
+    "head_h": 3.0
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.1,
+    "counterbore_depth": 3.2
+   },
+   "search": "M3x12 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m3x16",
+   "category": "screw",
+   "name": "M3 x 16 socket head cap screw",
+   "size": "M3 x 16",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 16,
+    "head_d": 5.5,
+    "head_h": 3.0
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.1,
+    "counterbore_depth": 3.2
+   },
+   "search": "M3x16 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m3x20",
+   "category": "screw",
+   "name": "M3 x 20 socket head cap screw",
+   "size": "M3 x 20",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 20,
+    "head_d": 5.5,
+    "head_h": 3.0
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.1,
+    "counterbore_depth": 3.2
+   },
+   "search": "M3x20 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m3x25",
+   "category": "screw",
+   "name": "M3 x 25 socket head cap screw",
+   "size": "M3 x 25",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 25,
+    "head_d": 5.5,
+    "head_h": 3.0
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.1,
+    "counterbore_depth": 3.2
+   },
+   "search": "M3x25 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m3x30",
+   "category": "screw",
+   "name": "M3 x 30 socket head cap screw",
+   "size": "M3 x 30",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 30,
+    "head_d": 5.5,
+    "head_h": 3.0
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.1,
+    "counterbore_depth": 3.2
+   },
+   "search": "M3x30 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m3x6",
+   "category": "screw",
+   "name": "M3 x 6 button head socket screw",
+   "size": "M3 x 6",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 6,
+    "head_d": 5.7,
+    "head_h": 1.65
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.3,
+    "counterbore_depth": 1.85
+   },
+   "search": "M3x6 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m3x8",
+   "category": "screw",
+   "name": "M3 x 8 button head socket screw",
+   "size": "M3 x 8",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 8,
+    "head_d": 5.7,
+    "head_h": 1.65
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.3,
+    "counterbore_depth": 1.85
+   },
+   "search": "M3x8 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m3x10",
+   "category": "screw",
+   "name": "M3 x 10 button head socket screw",
+   "size": "M3 x 10",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 10,
+    "head_d": 5.7,
+    "head_h": 1.65
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.3,
+    "counterbore_depth": 1.85
+   },
+   "search": "M3x10 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m3x12",
+   "category": "screw",
+   "name": "M3 x 12 button head socket screw",
+   "size": "M3 x 12",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 12,
+    "head_d": 5.7,
+    "head_h": 1.65
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.3,
+    "counterbore_depth": 1.85
+   },
+   "search": "M3x12 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m3x16",
+   "category": "screw",
+   "name": "M3 x 16 button head socket screw",
+   "size": "M3 x 16",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 16,
+    "head_d": 5.7,
+    "head_h": 1.65
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.3,
+    "counterbore_depth": 1.85
+   },
+   "search": "M3x16 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m3x20",
+   "category": "screw",
+   "name": "M3 x 20 button head socket screw",
+   "size": "M3 x 20",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 20,
+    "head_d": 5.7,
+    "head_h": 1.65
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.3,
+    "counterbore_depth": 1.85
+   },
+   "search": "M3x20 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m3x25",
+   "category": "screw",
+   "name": "M3 x 25 button head socket screw",
+   "size": "M3 x 25",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 25,
+    "head_d": 5.7,
+    "head_h": 1.65
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.3,
+    "counterbore_depth": 1.85
+   },
+   "search": "M3x25 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m3x30",
+   "category": "screw",
+   "name": "M3 x 30 button head socket screw",
+   "size": "M3 x 30",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 30,
+    "head_d": 5.7,
+    "head_h": 1.65
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "counterbore_d": 6.3,
+    "counterbore_depth": 1.85
+   },
+   "search": "M3x30 button head socket screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m3x6",
+   "category": "screw",
+   "name": "M3 x 6 countersunk flat head screw",
+   "size": "M3 x 6",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 6,
+    "head_d": 6.72,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "countersink_d": 7.12,
+    "countersink_angle": 90
+   },
+   "search": "M3x6 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m3x8",
+   "category": "screw",
+   "name": "M3 x 8 countersunk flat head screw",
+   "size": "M3 x 8",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 8,
+    "head_d": 6.72,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "countersink_d": 7.12,
+    "countersink_angle": 90
+   },
+   "search": "M3x8 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m3x10",
+   "category": "screw",
+   "name": "M3 x 10 countersunk flat head screw",
+   "size": "M3 x 10",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 10,
+    "head_d": 6.72,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "countersink_d": 7.12,
+    "countersink_angle": 90
+   },
+   "search": "M3x10 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m3x12",
+   "category": "screw",
+   "name": "M3 x 12 countersunk flat head screw",
+   "size": "M3 x 12",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 12,
+    "head_d": 6.72,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "countersink_d": 7.12,
+    "countersink_angle": 90
+   },
+   "search": "M3x12 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m3x16",
+   "category": "screw",
+   "name": "M3 x 16 countersunk flat head screw",
+   "size": "M3 x 16",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 16,
+    "head_d": 6.72,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "countersink_d": 7.12,
+    "countersink_angle": 90
+   },
+   "search": "M3x16 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m3x20",
+   "category": "screw",
+   "name": "M3 x 20 countersunk flat head screw",
+   "size": "M3 x 20",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 20,
+    "head_d": 6.72,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "countersink_d": 7.12,
+    "countersink_angle": 90
+   },
+   "search": "M3x20 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m3x25",
+   "category": "screw",
+   "name": "M3 x 25 countersunk flat head screw",
+   "size": "M3 x 25",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 25,
+    "head_d": 6.72,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "countersink_d": 7.12,
+    "countersink_angle": 90
+   },
+   "search": "M3x25 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m3x30",
+   "category": "screw",
+   "name": "M3 x 30 countersunk flat head screw",
+   "size": "M3 x 30",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 30,
+    "head_d": 6.72,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 3.4,
+    "pilot_in_plastic_d": 2.7,
+    "min_thread_engagement": 4.5,
+    "countersink_d": 7.12,
+    "countersink_angle": 90
+   },
+   "search": "M3x30 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-shcs-m4x8",
+   "category": "screw",
+   "name": "M4 x 8 socket head cap screw",
+   "size": "M4 x 8",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 8,
+    "head_d": 7.0,
+    "head_h": 4.0
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 7.6,
+    "counterbore_depth": 4.2
+   },
+   "search": "M4x8 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m4x10",
+   "category": "screw",
+   "name": "M4 x 10 socket head cap screw",
+   "size": "M4 x 10",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 10,
+    "head_d": 7.0,
+    "head_h": 4.0
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 7.6,
+    "counterbore_depth": 4.2
+   },
+   "search": "M4x10 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m4x12",
+   "category": "screw",
+   "name": "M4 x 12 socket head cap screw",
+   "size": "M4 x 12",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 12,
+    "head_d": 7.0,
+    "head_h": 4.0
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 7.6,
+    "counterbore_depth": 4.2
+   },
+   "search": "M4x12 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m4x16",
+   "category": "screw",
+   "name": "M4 x 16 socket head cap screw",
+   "size": "M4 x 16",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 16,
+    "head_d": 7.0,
+    "head_h": 4.0
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 7.6,
+    "counterbore_depth": 4.2
+   },
+   "search": "M4x16 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m4x20",
+   "category": "screw",
+   "name": "M4 x 20 socket head cap screw",
+   "size": "M4 x 20",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 20,
+    "head_d": 7.0,
+    "head_h": 4.0
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 7.6,
+    "counterbore_depth": 4.2
+   },
+   "search": "M4x20 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m4x25",
+   "category": "screw",
+   "name": "M4 x 25 socket head cap screw",
+   "size": "M4 x 25",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 25,
+    "head_d": 7.0,
+    "head_h": 4.0
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 7.6,
+    "counterbore_depth": 4.2
+   },
+   "search": "M4x25 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m4x8",
+   "category": "screw",
+   "name": "M4 x 8 button head socket screw",
+   "size": "M4 x 8",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 8,
+    "head_d": 7.6,
+    "head_h": 2.2
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 8.2,
+    "counterbore_depth": 2.4
+   },
+   "search": "M4x8 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m4x10",
+   "category": "screw",
+   "name": "M4 x 10 button head socket screw",
+   "size": "M4 x 10",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 10,
+    "head_d": 7.6,
+    "head_h": 2.2
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 8.2,
+    "counterbore_depth": 2.4
+   },
+   "search": "M4x10 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m4x12",
+   "category": "screw",
+   "name": "M4 x 12 button head socket screw",
+   "size": "M4 x 12",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 12,
+    "head_d": 7.6,
+    "head_h": 2.2
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 8.2,
+    "counterbore_depth": 2.4
+   },
+   "search": "M4x12 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m4x16",
+   "category": "screw",
+   "name": "M4 x 16 button head socket screw",
+   "size": "M4 x 16",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 16,
+    "head_d": 7.6,
+    "head_h": 2.2
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 8.2,
+    "counterbore_depth": 2.4
+   },
+   "search": "M4x16 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m4x20",
+   "category": "screw",
+   "name": "M4 x 20 button head socket screw",
+   "size": "M4 x 20",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 20,
+    "head_d": 7.6,
+    "head_h": 2.2
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 8.2,
+    "counterbore_depth": 2.4
+   },
+   "search": "M4x20 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m4x25",
+   "category": "screw",
+   "name": "M4 x 25 button head socket screw",
+   "size": "M4 x 25",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 25,
+    "head_d": 7.6,
+    "head_h": 2.2
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "counterbore_d": 8.2,
+    "counterbore_depth": 2.4
+   },
+   "search": "M4x25 button head socket screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m4x8",
+   "category": "screw",
+   "name": "M4 x 8 countersunk flat head screw",
+   "size": "M4 x 8",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 8,
+    "head_d": 8.96,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "countersink_d": 9.36,
+    "countersink_angle": 90
+   },
+   "search": "M4x8 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m4x10",
+   "category": "screw",
+   "name": "M4 x 10 countersunk flat head screw",
+   "size": "M4 x 10",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 10,
+    "head_d": 8.96,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "countersink_d": 9.36,
+    "countersink_angle": 90
+   },
+   "search": "M4x10 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m4x12",
+   "category": "screw",
+   "name": "M4 x 12 countersunk flat head screw",
+   "size": "M4 x 12",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 12,
+    "head_d": 8.96,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "countersink_d": 9.36,
+    "countersink_angle": 90
+   },
+   "search": "M4x12 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m4x16",
+   "category": "screw",
+   "name": "M4 x 16 countersunk flat head screw",
+   "size": "M4 x 16",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 16,
+    "head_d": 8.96,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "countersink_d": 9.36,
+    "countersink_angle": 90
+   },
+   "search": "M4x16 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m4x20",
+   "category": "screw",
+   "name": "M4 x 20 countersunk flat head screw",
+   "size": "M4 x 20",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 20,
+    "head_d": 8.96,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "countersink_d": 9.36,
+    "countersink_angle": 90
+   },
+   "search": "M4x20 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m4x25",
+   "category": "screw",
+   "name": "M4 x 25 countersunk flat head screw",
+   "size": "M4 x 25",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 25,
+    "head_d": 8.96,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 4.5,
+    "pilot_in_plastic_d": 3.6,
+    "min_thread_engagement": 6.0,
+    "countersink_d": 9.36,
+    "countersink_angle": 90
+   },
+   "search": "M4x25 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-shcs-m5x10",
+   "category": "screw",
+   "name": "M5 x 10 socket head cap screw",
+   "size": "M5 x 10",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 10,
+    "head_d": 8.5,
+    "head_h": 5.0
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "counterbore_d": 9.1,
+    "counterbore_depth": 5.2
+   },
+   "search": "M5x10 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m5x16",
+   "category": "screw",
+   "name": "M5 x 16 socket head cap screw",
+   "size": "M5 x 16",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 16,
+    "head_d": 8.5,
+    "head_h": 5.0
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "counterbore_d": 9.1,
+    "counterbore_depth": 5.2
+   },
+   "search": "M5x16 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m5x20",
+   "category": "screw",
+   "name": "M5 x 20 socket head cap screw",
+   "size": "M5 x 20",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 20,
+    "head_d": 8.5,
+    "head_h": 5.0
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "counterbore_d": 9.1,
+    "counterbore_depth": 5.2
+   },
+   "search": "M5x20 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-shcs-m5x25",
+   "category": "screw",
+   "name": "M5 x 25 socket head cap screw",
+   "size": "M5 x 25",
+   "type": "socket head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 25,
+    "head_d": 8.5,
+    "head_h": 5.0
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "counterbore_d": 9.1,
+    "counterbore_depth": 5.2
+   },
+   "search": "M5x25 socket head cap screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m5x10",
+   "category": "screw",
+   "name": "M5 x 10 button head socket screw",
+   "size": "M5 x 10",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 10,
+    "head_d": 9.5,
+    "head_h": 2.75
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "counterbore_d": 10.1,
+    "counterbore_depth": 2.95
+   },
+   "search": "M5x10 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m5x16",
+   "category": "screw",
+   "name": "M5 x 16 button head socket screw",
+   "size": "M5 x 16",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 16,
+    "head_d": 9.5,
+    "head_h": 2.75
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "counterbore_d": 10.1,
+    "counterbore_depth": 2.95
+   },
+   "search": "M5x16 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m5x20",
+   "category": "screw",
+   "name": "M5 x 20 button head socket screw",
+   "size": "M5 x 20",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 20,
+    "head_d": 9.5,
+    "head_h": 2.75
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "counterbore_d": 10.1,
+    "counterbore_depth": 2.95
+   },
+   "search": "M5x20 button head socket screw stainless"
+  },
+  {
+   "key": "screw-bhcs-m5x25",
+   "category": "screw",
+   "name": "M5 x 25 button head socket screw",
+   "size": "M5 x 25",
+   "type": "button head",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 25,
+    "head_d": 9.5,
+    "head_h": 2.75
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "counterbore_d": 10.1,
+    "counterbore_depth": 2.95
+   },
+   "search": "M5x25 button head socket screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m5x10",
+   "category": "screw",
+   "name": "M5 x 10 countersunk flat head screw",
+   "size": "M5 x 10",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 10,
+    "head_d": 11.2,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "countersink_d": 11.6,
+    "countersink_angle": 90
+   },
+   "search": "M5x10 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m5x16",
+   "category": "screw",
+   "name": "M5 x 16 countersunk flat head screw",
+   "size": "M5 x 16",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 16,
+    "head_d": 11.2,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "countersink_d": 11.6,
+    "countersink_angle": 90
+   },
+   "search": "M5x16 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m5x20",
+   "category": "screw",
+   "name": "M5 x 20 countersunk flat head screw",
+   "size": "M5 x 20",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 20,
+    "head_d": 11.2,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "countersink_d": 11.6,
+    "countersink_angle": 90
+   },
+   "search": "M5x20 countersunk flat head screw stainless"
+  },
+  {
+   "key": "screw-fhcs-m5x25",
+   "category": "screw",
+   "name": "M5 x 25 countersunk flat head screw",
+   "size": "M5 x 25",
+   "type": "countersunk",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 25,
+    "head_d": 11.2,
+    "head_angle": 90
+   },
+   "holes": {
+    "clearance_d": 5.5,
+    "pilot_in_plastic_d": 4.5,
+    "min_thread_engagement": 7.5,
+    "countersink_d": 11.6,
+    "countersink_angle": 90
+   },
+   "search": "M5x25 countersunk flat head screw stainless"
+  },
+  {
+   "key": "insert-m2x3.0",
+   "category": "heat-set insert",
+   "name": "M2 x 3.0 heat-set insert",
+   "size": "M2 x 3.0",
+   "type": "knurled brass",
+   "material": "brass",
+   "dims": {
+    "thread_d": 2.0,
+    "length": 3.0
+   },
+   "holes": {
+    "insert_hole_d": 3.2,
+    "insert_hole_depth": 4.0,
+    "note": "Melt in with a soldering iron; leave 1 mm below for displaced plastic."
+   },
+   "search": "M2 heat set insert brass 3.0mm 3D printing"
+  },
+  {
+   "key": "insert-m2.5x4.0",
+   "category": "heat-set insert",
+   "name": "M2.5 x 4.0 heat-set insert",
+   "size": "M2.5 x 4.0",
+   "type": "knurled brass",
+   "material": "brass",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 4.0
+   },
+   "holes": {
+    "insert_hole_d": 3.6,
+    "insert_hole_depth": 5.0,
+    "note": "Melt in with a soldering iron; leave 1 mm below for displaced plastic."
+   },
+   "search": "M2.5 heat set insert brass 4.0mm 3D printing"
+  },
+  {
+   "key": "insert-m3x5.7",
+   "category": "heat-set insert",
+   "name": "M3 x 5.7 heat-set insert",
+   "size": "M3 x 5.7",
+   "type": "knurled brass",
+   "material": "brass",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 5.7
+   },
+   "holes": {
+    "insert_hole_d": 4.0,
+    "insert_hole_depth": 6.7,
+    "note": "Melt in with a soldering iron; leave 1 mm below for displaced plastic."
+   },
+   "search": "M3 heat set insert brass 5.7mm 3D printing"
+  },
+  {
+   "key": "insert-m4x8.1",
+   "category": "heat-set insert",
+   "name": "M4 x 8.1 heat-set insert",
+   "size": "M4 x 8.1",
+   "type": "knurled brass",
+   "material": "brass",
+   "dims": {
+    "thread_d": 4.0,
+    "length": 8.1
+   },
+   "holes": {
+    "insert_hole_d": 5.6,
+    "insert_hole_depth": 9.1,
+    "note": "Melt in with a soldering iron; leave 1 mm below for displaced plastic."
+   },
+   "search": "M4 heat set insert brass 8.1mm 3D printing"
+  },
+  {
+   "key": "insert-m5x9.5",
+   "category": "heat-set insert",
+   "name": "M5 x 9.5 heat-set insert",
+   "size": "M5 x 9.5",
+   "type": "knurled brass",
+   "material": "brass",
+   "dims": {
+    "thread_d": 5.0,
+    "length": 9.5
+   },
+   "holes": {
+    "insert_hole_d": 6.4,
+    "insert_hole_depth": 10.5,
+    "note": "Melt in with a soldering iron; leave 1 mm below for displaced plastic."
+   },
+   "search": "M5 heat set insert brass 9.5mm 3D printing"
+  },
+  {
+   "key": "nut-hex-m2",
+   "category": "nut",
+   "name": "M2 hex nut",
+   "size": "M2",
+   "type": "hex nut",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.0,
+    "across_flats": 4.0,
+    "thickness": 1.6
+   },
+   "holes": {
+    "nut_trap_across_flats": 4.3,
+    "nut_trap_depth": 1.8,
+    "clearance_d": 2.4
+   },
+   "search": "M2 hex nut stainless"
+  },
+  {
+   "key": "nut-hex-m2.5",
+   "category": "nut",
+   "name": "M2.5 hex nut",
+   "size": "M2.5",
+   "type": "hex nut",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 2.5,
+    "across_flats": 5.0,
+    "thickness": 2.0
+   },
+   "holes": {
+    "nut_trap_across_flats": 5.3,
+    "nut_trap_depth": 2.2,
+    "clearance_d": 2.9
+   },
+   "search": "M2.5 hex nut stainless"
+  },
+  {
+   "key": "nut-hex-m3",
+   "category": "nut",
+   "name": "M3 hex nut",
+   "size": "M3",
+   "type": "hex nut",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "across_flats": 5.5,
+    "thickness": 2.4
+   },
+   "holes": {
+    "nut_trap_across_flats": 5.8,
+    "nut_trap_depth": 2.6,
+    "clearance_d": 3.4
+   },
+   "search": "M3 hex nut stainless"
+  },
+  {
+   "key": "nut-nyloc-m3",
+   "category": "nut",
+   "name": "M3 nyloc nut",
+   "size": "M3",
+   "type": "nyloc nut",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 3.0,
+    "across_flats": 5.5,
+    "thickness": 4.0
+   },
+   "holes": {
+    "nut_trap_across_flats": 5.8,
+    "nut_trap_depth": 4.2,
+    "clearance_d": 3.4
+   },
+   "search": "M3 nylon insert lock nut stainless"
+  },
+  {
+   "key": "nut-hex-m4",
+   "category": "nut",
+   "name": "M4 hex nut",
+   "size": "M4",
+   "type": "hex nut",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "across_flats": 7.0,
+    "thickness": 3.2
+   },
+   "holes": {
+    "nut_trap_across_flats": 7.3,
+    "nut_trap_depth": 3.4,
+    "clearance_d": 4.5
+   },
+   "search": "M4 hex nut stainless"
+  },
+  {
+   "key": "nut-nyloc-m4",
+   "category": "nut",
+   "name": "M4 nyloc nut",
+   "size": "M4",
+   "type": "nyloc nut",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 4.0,
+    "across_flats": 7.0,
+    "thickness": 5.0
+   },
+   "holes": {
+    "nut_trap_across_flats": 7.3,
+    "nut_trap_depth": 5.2,
+    "clearance_d": 4.5
+   },
+   "search": "M4 nylon insert lock nut stainless"
+  },
+  {
+   "key": "nut-hex-m5",
+   "category": "nut",
+   "name": "M5 hex nut",
+   "size": "M5",
+   "type": "hex nut",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "across_flats": 8.0,
+    "thickness": 4.0
+   },
+   "holes": {
+    "nut_trap_across_flats": 8.3,
+    "nut_trap_depth": 4.2,
+    "clearance_d": 5.5
+   },
+   "search": "M5 hex nut stainless"
+  },
+  {
+   "key": "nut-nyloc-m5",
+   "category": "nut",
+   "name": "M5 nyloc nut",
+   "size": "M5",
+   "type": "nyloc nut",
+   "material": "stainless steel",
+   "dims": {
+    "thread_d": 5.0,
+    "across_flats": 8.0,
+    "thickness": 5.0
+   },
+   "holes": {
+    "nut_trap_across_flats": 8.3,
+    "nut_trap_depth": 5.2,
+    "clearance_d": 5.5
+   },
+   "search": "M5 nylon insert lock nut stainless"
+  },
+  {
+   "key": "washer-m3",
+   "category": "washer",
+   "name": "M3 flat washer",
+   "size": "M3",
+   "type": "flat washer",
+   "material": "stainless steel",
+   "dims": {
+    "inner_d": 3.2,
+    "outer_d": 7.0,
+    "thickness": 0.5
+   },
+   "holes": {
+    "recess_d": 7.4,
+    "recess_depth": 0.6
+   },
+   "search": "M3 flat washer stainless"
+  },
+  {
+   "key": "washer-m4",
+   "category": "washer",
+   "name": "M4 flat washer",
+   "size": "M4",
+   "type": "flat washer",
+   "material": "stainless steel",
+   "dims": {
+    "inner_d": 4.3,
+    "outer_d": 9.0,
+    "thickness": 0.8
+   },
+   "holes": {
+    "recess_d": 9.4,
+    "recess_depth": 0.9
+   },
+   "search": "M4 flat washer stainless"
+  },
+  {
+   "key": "washer-m5",
+   "category": "washer",
+   "name": "M5 flat washer",
+   "size": "M5",
+   "type": "flat washer",
+   "material": "stainless steel",
+   "dims": {
+    "inner_d": 5.3,
+    "outer_d": 10.0,
+    "thickness": 1.0
+   },
+   "holes": {
+    "recess_d": 10.4,
+    "recess_depth": 1.1
+   },
+   "search": "M5 flat washer stainless"
+  },
+  {
+   "key": "magnet-disc-6x2",
+   "category": "magnet",
+   "name": "6 x 2 mm disc magnet",
+   "size": "6 x 2 mm",
+   "type": "neodymium disc (N52)",
+   "material": "neodymium",
+   "dims": {
+    "diameter": 6,
+    "thickness": 2
+   },
+   "holes": {
+    "press_fit_pocket_d": 6.1,
+    "glue_pocket_d": 6.3,
+    "pocket_depth": 2.2,
+    "note": "Mark polarity before inserting; magnets in a pair must face opposite poles."
+   },
+   "search": "6x2mm neodymium disc magnet N52"
+  },
+  {
+   "key": "magnet-disc-6x3",
+   "category": "magnet",
+   "name": "6 x 3 mm disc magnet",
+   "size": "6 x 3 mm",
+   "type": "neodymium disc (N52)",
+   "material": "neodymium",
+   "dims": {
+    "diameter": 6,
+    "thickness": 3
+   },
+   "holes": {
+    "press_fit_pocket_d": 6.1,
+    "glue_pocket_d": 6.3,
+    "pocket_depth": 3.2,
+    "note": "Mark polarity before inserting; magnets in a pair must face opposite poles."
+   },
+   "search": "6x3mm neodymium disc magnet N52"
+  },
+  {
+   "key": "magnet-disc-8x3",
+   "category": "magnet",
+   "name": "8 x 3 mm disc magnet",
+   "size": "8 x 3 mm",
+   "type": "neodymium disc (N52)",
+   "material": "neodymium",
+   "dims": {
+    "diameter": 8,
+    "thickness": 3
+   },
+   "holes": {
+    "press_fit_pocket_d": 8.1,
+    "glue_pocket_d": 8.3,
+    "pocket_depth": 3.2,
+    "note": "Mark polarity before inserting; magnets in a pair must face opposite poles."
+   },
+   "search": "8x3mm neodymium disc magnet N52"
+  },
+  {
+   "key": "magnet-disc-10x2",
+   "category": "magnet",
+   "name": "10 x 2 mm disc magnet",
+   "size": "10 x 2 mm",
+   "type": "neodymium disc (N52)",
+   "material": "neodymium",
+   "dims": {
+    "diameter": 10,
+    "thickness": 2
+   },
+   "holes": {
+    "press_fit_pocket_d": 10.1,
+    "glue_pocket_d": 10.3,
+    "pocket_depth": 2.2,
+    "note": "Mark polarity before inserting; magnets in a pair must face opposite poles."
+   },
+   "search": "10x2mm neodymium disc magnet N52"
+  },
+  {
+   "key": "magnet-disc-10x3",
+   "category": "magnet",
+   "name": "10 x 3 mm disc magnet",
+   "size": "10 x 3 mm",
+   "type": "neodymium disc (N52)",
+   "material": "neodymium",
+   "dims": {
+    "diameter": 10,
+    "thickness": 3
+   },
+   "holes": {
+    "press_fit_pocket_d": 10.1,
+    "glue_pocket_d": 10.3,
+    "pocket_depth": 3.2,
+    "note": "Mark polarity before inserting; magnets in a pair must face opposite poles."
+   },
+   "search": "10x3mm neodymium disc magnet N52"
+  },
+  {
+   "key": "magnet-disc-12x3",
+   "category": "magnet",
+   "name": "12 x 3 mm disc magnet",
+   "size": "12 x 3 mm",
+   "type": "neodymium disc (N52)",
+   "material": "neodymium",
+   "dims": {
+    "diameter": 12,
+    "thickness": 3
+   },
+   "holes": {
+    "press_fit_pocket_d": 12.1,
+    "glue_pocket_d": 12.3,
+    "pocket_depth": 3.2,
+    "note": "Mark polarity before inserting; magnets in a pair must face opposite poles."
+   },
+   "search": "12x3mm neodymium disc magnet N52"
+  },
+  {
+   "key": "magnet-disc-15x3",
+   "category": "magnet",
+   "name": "15 x 3 mm disc magnet",
+   "size": "15 x 3 mm",
+   "type": "neodymium disc (N52)",
+   "material": "neodymium",
+   "dims": {
+    "diameter": 15,
+    "thickness": 3
+   },
+   "holes": {
+    "press_fit_pocket_d": 15.1,
+    "glue_pocket_d": 15.3,
+    "pocket_depth": 3.2,
+    "note": "Mark polarity before inserting; magnets in a pair must face opposite poles."
+   },
+   "search": "15x3mm neodymium disc magnet N52"
+  },
+  {
+   "key": "magnet-disc-20x3",
+   "category": "magnet",
+   "name": "20 x 3 mm disc magnet",
+   "size": "20 x 3 mm",
+   "type": "neodymium disc (N52)",
+   "material": "neodymium",
+   "dims": {
+    "diameter": 20,
+    "thickness": 3
+   },
+   "holes": {
+    "press_fit_pocket_d": 20.1,
+    "glue_pocket_d": 20.3,
+    "pocket_depth": 3.2,
+    "note": "Mark polarity before inserting; magnets in a pair must face opposite poles."
+   },
+   "search": "20x3mm neodymium disc magnet N52"
+  },
+  {
+   "key": "bearing-623zz",
+   "category": "bearing",
+   "name": "623ZZ ball bearing",
+   "size": "3 x 10 x 4 mm",
+   "type": "deep groove, shielded",
+   "material": "chrome steel",
+   "dims": {
+    "bore": 3,
+    "outer_d": 10,
+    "width": 4
+   },
+   "holes": {
+    "seat_d": 10.15,
+    "seat_depth": 4,
+    "shaft_d": 3,
+    "note": "Seat diameter is a light press fit; add the printer's clearance if the fit is tight."
+   },
+   "search": "623ZZ ball bearing 3x10x4"
+  },
+  {
+   "key": "bearing-625zz",
+   "category": "bearing",
+   "name": "625ZZ ball bearing",
+   "size": "5 x 16 x 5 mm",
+   "type": "deep groove, shielded",
+   "material": "chrome steel",
+   "dims": {
+    "bore": 5,
+    "outer_d": 16,
+    "width": 5
+   },
+   "holes": {
+    "seat_d": 16.15,
+    "seat_depth": 5,
+    "shaft_d": 5,
+    "note": "Seat diameter is a light press fit; add the printer's clearance if the fit is tight."
+   },
+   "search": "625ZZ ball bearing 5x16x5"
+  },
+  {
+   "key": "bearing-mr105zz",
+   "category": "bearing",
+   "name": "MR105ZZ ball bearing",
+   "size": "5 x 10 x 4 mm",
+   "type": "deep groove, shielded",
+   "material": "chrome steel",
+   "dims": {
+    "bore": 5,
+    "outer_d": 10,
+    "width": 4
+   },
+   "holes": {
+    "seat_d": 10.15,
+    "seat_depth": 4,
+    "shaft_d": 5,
+    "note": "Seat diameter is a light press fit; add the printer's clearance if the fit is tight."
+   },
+   "search": "MR105ZZ ball bearing 5x10x4"
+  },
+  {
+   "key": "bearing-688zz",
+   "category": "bearing",
+   "name": "688ZZ ball bearing",
+   "size": "8 x 16 x 5 mm",
+   "type": "deep groove, shielded",
+   "material": "chrome steel",
+   "dims": {
+    "bore": 8,
+    "outer_d": 16,
+    "width": 5
+   },
+   "holes": {
+    "seat_d": 16.15,
+    "seat_depth": 5,
+    "shaft_d": 8,
+    "note": "Seat diameter is a light press fit; add the printer's clearance if the fit is tight."
+   },
+   "search": "688ZZ ball bearing 8x16x5"
+  },
+  {
+   "key": "bearing-608zz",
+   "category": "bearing",
+   "name": "608ZZ ball bearing",
+   "size": "8 x 22 x 7 mm",
+   "type": "deep groove, shielded",
+   "material": "chrome steel",
+   "dims": {
+    "bore": 8,
+    "outer_d": 22,
+    "width": 7
+   },
+   "holes": {
+    "seat_d": 22.15,
+    "seat_depth": 7,
+    "shaft_d": 8,
+    "note": "Seat diameter is a light press fit; add the printer's clearance if the fit is tight."
+   },
+   "search": "608ZZ ball bearing 8x22x7"
+  },
+  {
+   "key": "bearing-6800zz",
+   "category": "bearing",
+   "name": "6800ZZ ball bearing",
+   "size": "10 x 19 x 5 mm",
+   "type": "deep groove, shielded",
+   "material": "chrome steel",
+   "dims": {
+    "bore": 10,
+    "outer_d": 19,
+    "width": 5
+   },
+   "holes": {
+    "seat_d": 19.15,
+    "seat_depth": 5,
+    "shaft_d": 10,
+    "note": "Seat diameter is a light press fit; add the printer's clearance if the fit is tight."
+   },
+   "search": "6800ZZ ball bearing 10x19x5"
+  },
+  {
+   "key": "bearing-6001zz",
+   "category": "bearing",
+   "name": "6001ZZ ball bearing",
+   "size": "12 x 28 x 8 mm",
+   "type": "deep groove, shielded",
+   "material": "chrome steel",
+   "dims": {
+    "bore": 12,
+    "outer_d": 28,
+    "width": 8
+   },
+   "holes": {
+    "seat_d": 28.15,
+    "seat_depth": 8,
+    "shaft_d": 12,
+    "note": "Seat diameter is a light press fit; add the printer's clearance if the fit is tight."
+   },
+   "search": "6001ZZ ball bearing 12x28x8"
+  },
+  {
+   "key": "standoff-m2.5x6",
+   "category": "standoff",
+   "name": "M2.5 x 6 brass standoff",
+   "size": "M2.5 x 6",
+   "type": "female-female hex",
+   "material": "brass",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 6
+   },
+   "holes": {
+    "clearance_d": 2.9
+   },
+   "search": "M2.5 x 6mm brass standoff female"
+  },
+  {
+   "key": "standoff-m2.5x10",
+   "category": "standoff",
+   "name": "M2.5 x 10 brass standoff",
+   "size": "M2.5 x 10",
+   "type": "female-female hex",
+   "material": "brass",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 10
+   },
+   "holes": {
+    "clearance_d": 2.9
+   },
+   "search": "M2.5 x 10mm brass standoff female"
+  },
+  {
+   "key": "standoff-m2.5x15",
+   "category": "standoff",
+   "name": "M2.5 x 15 brass standoff",
+   "size": "M2.5 x 15",
+   "type": "female-female hex",
+   "material": "brass",
+   "dims": {
+    "thread_d": 2.5,
+    "length": 15
+   },
+   "holes": {
+    "clearance_d": 2.9
+   },
+   "search": "M2.5 x 15mm brass standoff female"
+  },
+  {
+   "key": "standoff-m3x5",
+   "category": "standoff",
+   "name": "M3 x 5 brass standoff",
+   "size": "M3 x 5",
+   "type": "female-female hex",
+   "material": "brass",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 5
+   },
+   "holes": {
+    "clearance_d": 3.4
+   },
+   "search": "M3 x 5mm brass standoff female"
+  },
+  {
+   "key": "standoff-m3x10",
+   "category": "standoff",
+   "name": "M3 x 10 brass standoff",
+   "size": "M3 x 10",
+   "type": "female-female hex",
+   "material": "brass",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 10
+   },
+   "holes": {
+    "clearance_d": 3.4
+   },
+   "search": "M3 x 10mm brass standoff female"
+  },
+  {
+   "key": "standoff-m3x15",
+   "category": "standoff",
+   "name": "M3 x 15 brass standoff",
+   "size": "M3 x 15",
+   "type": "female-female hex",
+   "material": "brass",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 15
+   },
+   "holes": {
+    "clearance_d": 3.4
+   },
+   "search": "M3 x 15mm brass standoff female"
+  },
+  {
+   "key": "standoff-m3x20",
+   "category": "standoff",
+   "name": "M3 x 20 brass standoff",
+   "size": "M3 x 20",
+   "type": "female-female hex",
+   "material": "brass",
+   "dims": {
+    "thread_d": 3.0,
+    "length": 20
+   },
+   "holes": {
+    "clearance_d": 3.4
+   },
+   "search": "M3 x 20mm brass standoff female"
+  },
+  {
+   "key": "rod-smooth-8mm",
+   "category": "rod",
+   "name": "8 mm smooth rod",
+   "size": "8 mm",
+   "type": "hardened linear rod",
+   "material": "chrome steel",
+   "dims": {
+    "diameter": 8
+   },
+   "holes": {
+    "rod_hole_d": 8.2,
+    "press_fit_d": 8.05
+   },
+   "search": "8mm smooth linear rod hardened"
+  },
+  {
+   "key": "belt-gt2-6mm",
+   "category": "belt",
+   "name": "GT2 belt, 6 mm wide",
+   "size": "6 mm",
+   "type": "GT2 timing belt",
+   "material": "rubber with glass fibre",
+   "dims": {
+    "width": 6,
+    "pitch": 2
+   },
+   "holes": {
+    "belt_slot_w": 6.6,
+    "belt_slot_t": 1.6
+   },
+   "search": "GT2 timing belt 6mm"
+  },
+  {
+   "key": "ptfe-4x2",
+   "category": "PTFE tube",
+   "name": "PTFE tube 4 x 2 mm",
+   "size": "4 x 2 mm",
+   "type": "PTFE tube",
+   "material": "PTFE",
+   "dims": {
+    "outer_d": 4,
+    "inner_d": 2
+   },
+   "holes": {
+    "tube_hole_d": 4.1,
+    "push_fit_d": 4.0
+   },
+   "search": "PTFE tube 4mm OD 2mm ID"
+  },
+  {
+   "key": "spring-compression-6x20",
+   "category": "spring",
+   "name": "Compression spring 6 x 20 mm",
+   "size": "6 x 20 mm",
+   "type": "compression spring",
+   "material": "spring steel",
+   "dims": {
+    "outer_d": 6,
+    "free_length": 20,
+    "wire_d": 0.6
+   },
+   "holes": {
+    "spring_pocket_d": 6.6
+   },
+   "search": "compression spring 6mm OD 20mm long"
+  },
+  {
+   "key": "rubber-foot-10x3",
+   "category": "rubber foot",
+   "name": "Adhesive rubber foot 10 x 3 mm",
+   "size": "10 x 3 mm",
+   "type": "self-adhesive bumper",
+   "material": "silicone rubber",
+   "dims": {
+    "diameter": 10,
+    "height": 3
+   },
+   "holes": {
+    "recess_d": 10.4,
+    "recess_depth": 1.0
+   },
+   "search": "self adhesive rubber feet 10mm"
+  }
+ ]
+}
