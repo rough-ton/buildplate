@@ -282,6 +282,10 @@ async def delete_connection(cid: str, request: Request):
         from . import chatgpt
 
         chatgpt.forget(cid, keep_registration=False)
+    if connections.get(cid)["method"] == "github.copilot":
+        from . import copilot
+
+        copilot.forget(cid)
     _conn_errors(connections.delete, cid)
     return {"ok": True}
 
@@ -420,7 +424,14 @@ async def plan_usage(cid: str, refresh: bool = False):
         from . import chatgpt
 
         # ChatGPT does not share plan meters with apps; OpenAI asks apps to link to its usage page
-        return {"report": None, "text": "", "manage_url": chatgpt.MANAGE_USAGE_URL, "fetched_at": time.time(), "plan_limit": None}
+        return {"report": None, "text": "", "manage_url": chatgpt.MANAGE_USAGE_URL, "fetched_at": time.time(), "plan_limit": None,
+                "manage_text": "ChatGPT doesn't share plan limits with apps. View and manage your ChatGPT usage, and Buildplate's limit, in ChatGPT's settings."}
+    if conn["method"] == "github.copilot":
+        from . import copilot
+
+        # premium-request usage lives on GitHub
+        return {"report": None, "text": "", "manage_url": copilot.MANAGE_URL, "fetched_at": time.time(), "plan_limit": None,
+                "manage_text": "GitHub doesn't share Copilot limits with apps. See your premium request usage and model settings on GitHub."}
     if conn["method"] != "anthropic.claude_code":
         raise HTTPException(400, "Only plan connections have plan usage.")
     try:

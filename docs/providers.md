@@ -12,6 +12,7 @@ Connections live in **Settings > AI connections** and take effect immediately.
 | Anthropic | Claude plan (Claude Code) | Nothing: you sign in to Claude | Uses your plan | A Claude Pro, Max, Team or Enterprise plan. See [below](#claude-plan) |
 | OpenAI | OpenAI API key | API key | Pay per use | [platform.openai.com](https://platform.openai.com/api-keys) |
 | OpenAI | ChatGPT plan (Sign in with ChatGPT) | Nothing: you sign in to ChatGPT | Uses your plan | A ChatGPT Plus or Pro plan. See [below](#chatgpt-plan) |
+| GitHub | Copilot plan (GitHub token) | A fine-grained GitHub token | Uses your plan | A GitHub Copilot plan. See [below](#copilot-plan) |
 | Google Gemini | Gemini API key | API key | Pay per use | [aistudio.google.com](https://aistudio.google.com/apikey) |
 | OpenRouter | OpenRouter API key | API key | Pay per use | [openrouter.ai](https://openrouter.ai/keys) |
 | OpenRouter | Sign in with OpenRouter | Nothing: you sign in on OpenRouter | Pay per use | An OpenRouter account. See [below](#sign-in-with-openrouter) |
@@ -26,7 +27,7 @@ Connections live in **Settings > AI connections** and take effect immediately.
 | Ollama | Ollama | Base URL | Local | Your Ollama server, for example `http://192.168.1.10:11434` |
 | OpenAI-compatible | OpenAI-compatible server | Base URL and optional key | Local | LM Studio, vLLM, LocalAI, llama.cpp server, LiteLLM proxy |
 
-Every request records which connection it used and how it is billed. Claude and ChatGPT plans can be used as described below. Other consumer subscriptions cannot be used; [Subscription sign-in by platform](./provider-rules.md) explains why for each one.
+Every request records which connection it used and how it is billed. Claude, ChatGPT and GitHub Copilot plans can be used as described below. Other consumer subscriptions cannot be used; [Subscription sign-in by platform](./provider-rules.md) explains why for each one.
 
 ## Adding a connection
 
@@ -87,6 +88,26 @@ How it works and what it can do:
 - Requests are sent with storage turned off, so OpenAI does not keep them as ChatGPT conversations.
 - **Sign out** on the card forgets the sign-in. Removing the connection deletes it.
 - Buildplate does not resell or pay for ChatGPT usage. You use your own plan under your own agreement with OpenAI.
+
+## Copilot plan
+
+The **Copilot plan (GitHub token)** connection uses your GitHub Copilot plan (Free, Pro, Pro+, Business or Enterprise) instead of an API key. It runs through GitHub's official [Copilot SDK](https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/authenticate), with a fine-grained token that can only make Copilot requests.
+
+**Before you start:** set a web UI password and sign in. Copilot plan connections always need one, even from the server itself.
+
+1. Under **Add a connection**, choose **GitHub > Copilot plan (GitHub token)**.
+2. Select **Create token on GitHub**. GitHub opens its new-token page with the name, a 90-day expiry and the one permission Buildplate needs (**Copilot requests**) already filled in. Check it and select **Generate token**.
+3. Copy the token (it starts with `github_pat_`), paste it into Buildplate and select **Connect**.
+
+The first Copilot connection downloads GitHub's Copilot runtime (about 90 MB) from GitHub's releases, checked against GitHub's published checksums, so connecting takes a minute. This needs internet access from the container. The card then shows **Connected** and the models your plan allows appear in every model picker. Studio shows **Using Copilot plan** under the prompt when one of them is picked.
+
+How it works and what it can do:
+
+- The token is stored encrypted, like any other key. Classic tokens (`ghp_`) don't work with Copilot; use a fine-grained one. When it expires or you revoke it on GitHub, the card shows an error: select **Edit** and paste a new token.
+- For each request, Buildplate runs GitHub's Copilot runtime with only Buildplate's own design tools (`check_design`, `list_parts`, `submit_design`). It has no shell, file or web access, and doesn't see the server's environment or any other GitHub credential.
+- Requests use your plan's premium requests and the models enabled in your [Copilot settings](https://github.com/settings/copilot/features). Studio and Usage show **Included in plan** instead of a cost, with the API-price equivalent on hover where the model's price is known. When you reach your plan's limit, the request stops with a message and a **Manage usage** button.
+- Removing the connection deletes its Copilot runtime state. Revoke the token on GitHub's [token page](https://github.com/settings/personal-access-tokens) too.
+- Buildplate does not resell or pay for Copilot usage. You use your own plan under your own agreement with GitHub.
 
 ## Sign in with OpenRouter
 

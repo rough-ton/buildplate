@@ -56,6 +56,13 @@ The MCP bearer token is not enough. Without a password, connections can still be
 - Claude Code reaches Buildplate's tools at `/mcp-run`, which accepts only loopback requests carrying the request's one-time token. The token stops working when the request ends.
 - Claude Code is downloaded from Anthropic's release bucket and verified against the SHA-256 in Anthropic's release manifest before it is used. Its self-updater is turned off so the pinned version stays in place.
 
+## Copilot plan connections
+
+- Adding or changing a Copilot plan connection needs a web UI password and a signed-in session, even from the server itself.
+- The GitHub token is stored encrypted in `settings.json` like other keys. Buildplate asks for a fine-grained token with only the **Copilot requests** permission and rejects classic `ghp_` tokens.
+- Each request runs GitHub's Copilot runtime through the Copilot SDK in its isolated ("empty") mode, with an allowlist of only Buildplate's `check_design`, `list_parts` and `submit_design`. It has no shell, file or web tools, runs in an empty temporary folder, and gets a minimal environment with its own home folder (`/data/copilot/<connection>`) and none of the server's `GH_TOKEN`, `GITHUB_TOKEN` or other variables. Tool permission requests are refused.
+- The runtime is downloaded by the SDK from GitHub's `github/copilot-cli` releases into `/data/tools/copilot` and verified against GitHub's published SHA-256 sums before it is used. The SDK version (and so the runtime version) is pinned in `requirements.txt`.
+
 ## Running the code the model writes
 
 OpenSCAD code is rendered by the OpenSCAD program inside the container, as an unprivileged user. OpenSCAD's language cannot run shell commands, and it can only read files through `include`, `use`, `import` and `surface`. Paths are resolved relative to a temporary working folder and the library folders.
