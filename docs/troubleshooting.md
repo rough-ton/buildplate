@@ -39,7 +39,7 @@ The container needs internet access to `downloads.claude.ai`. Behind a proxy, se
 
 ## Renders time out
 
-Complex models, high `$fn` values and many boolean operations take longer. Check **Settings > System** shows OpenSCAD "with Manifold"; the Manifold engine is many times faster than CGAL. Raise **Rendering > Timeout** if needed.
+Complex models, high `$fn` values and many boolean operations take longer. Check **Settings > About** shows OpenSCAD "with Manifold"; the Manifold engine is many times faster than CGAL. Raise **Rendering > Timeout** if needed.
 
 ## "Model has no tool support; switching to text mode"
 
@@ -57,7 +57,7 @@ Stop the container and edit `/data/settings.json`: set `"ui_password_hash"` unde
 
 Set `PUID` and `PGID` to the owner of the folder. On Unraid that is `99` and `100`. The container fixes ownership of `/data` on start when they differ.
 
-## Settings > System shows "OpenSCAD: Not working"
+## Settings > About shows "OpenSCAD: Not working"
 
 The message after it is OpenSCAD's own error. A permission error on a `.config` folder means the image predates the fix for running as an unprivileged user; pull the latest image. Otherwise check `docker logs buildplate`.
 

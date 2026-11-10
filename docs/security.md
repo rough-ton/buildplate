@@ -2,6 +2,13 @@
 
 Buildplate holds credentials for AI connections that can spend money, so treat it like any other service with credentials.
 
+## Reporting a vulnerability
+
+Please report security problems privately through GitHub's
+[private vulnerability reporting](https://github.com/rough-ton/buildplate/security/advisories/new)
+(the repository's **Security** tab, then **Report a vulnerability**), not in a public issue.
+Include the Buildplate version, how you run it, and steps to reproduce.
+
 ## Recommended setup
 
 1. **Set a web UI password** in **Settings > Access and MCP**, or set `BUILDPLATE_ADMIN_PASSWORD` before first start. Adding or changing AI connections requires it.

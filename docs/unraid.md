@@ -34,7 +34,7 @@ git clone --depth 1 https://github.com/nophead/NopSCADlib
 chown -R 99:100 NopSCADlib
 ```
 
-They are available on the next render and listed in **Settings > System**.
+They are available on the next render and listed in **Settings > About**.
 
 ## Opening STL files directly
 
