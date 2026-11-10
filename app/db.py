@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS versions (
     stats TEXT NOT NULL DEFAULT '{}',
     run_id TEXT,
     created_at REAL NOT NULL,
+    origin TEXT,
+    provider TEXT,
+    model TEXT,
+    client TEXT,
     UNIQUE(design_id, version)
 );
 CREATE TABLE IF NOT EXISTS messages (
@@ -102,7 +106,37 @@ _conn: sqlite3.Connection | None = None
 
 # Bump when the search index layout or contents change; existing databases are
 # reindexed on the next start.
-INDEX_VERSION = 1
+INDEX_VERSION = 2
+
+# Where a version came from: the built-in design agent, a manual save in Studio or
+# the API, or an external MCP client calling save_design.
+ORIGINS = ("agent", "manual", "mcp")
+
+# Columns added to versions after the first release, with their types.
+_VERSION_COLUMNS = {"origin": "TEXT", "provider": "TEXT", "model": "TEXT", "client": "TEXT"}
+
+
+def _migrate(c: sqlite3.Connection) -> None:
+    """Add columns introduced after the first release and backfill them. Idempotent."""
+    have = {r["name"] for r in c.execute("PRAGMA table_info(versions)")}
+    for col, typ in _VERSION_COLUMNS.items():
+        if col not in have:
+            c.execute(f"ALTER TABLE versions ADD COLUMN {col} {typ}")
+    # Versions saved before the generating model was recorded on the version:
+    # copy it from the run. Without a run, an MCP design's versions are assumed to
+    # come from the MCP client and everything else from a manual save.
+    c.execute(
+        "UPDATE versions SET origin='agent', "
+        "provider=(SELECT provider FROM runs WHERE runs.id=versions.run_id), "
+        "model=(SELECT model FROM runs WHERE runs.id=versions.run_id) "
+        "WHERE origin IS NULL AND run_id IN (SELECT id FROM runs)"
+    )
+    c.execute(
+        "UPDATE versions SET origin=CASE "
+        "WHEN run_id IS NOT NULL THEN 'agent' "
+        "WHEN (SELECT source FROM designs WHERE designs.id=versions.design_id)='mcp' THEN 'mcp' "
+        "ELSE 'manual' END WHERE origin IS NULL"
+    )
 
 # bm25 weights, in design_fts column order
 _FTS_WEIGHTS = "0, 10.0, 6.0, 3.0, 2.0, 1.0, 1.0, 1.0, 1.0"
@@ -114,6 +148,7 @@ def init() -> None:
     _conn = _connect()
     _conn.executescript(SCHEMA)
     with tx() as c:
+        _migrate(c)
         if c.execute("PRAGMA user_version").fetchone()[0] < INDEX_VERSION:
             c.execute("DELETE FROM design_fts")
             ids = [r[0] for r in c.execute("SELECT id FROM designs")]
@@ -142,19 +177,19 @@ def _rows(cur: sqlite3.Cursor) -> list[dict[str, Any]]:
 
 # ---- search index ----------------------------------------------------------
 def _reindex(c: sqlite3.Connection, design_id: str) -> None:
-    """Rebuild one design's full-text row from its title, tags, every version's summary
-    and printer, and the prompt, provider and model of the runs that produced versions."""
+    """Rebuild one design's full-text row from its title, tags, every version's summary,
+    printer, provider, model and MCP client, and the prompts of the runs that produced versions."""
     c.execute("DELETE FROM design_fts WHERE design_id=?", (design_id,))
     d = c.execute("SELECT title, source FROM designs WHERE id=?", (design_id,)).fetchone()
     if d is None:
         return
     versions = c.execute(
-        "SELECT summary, json_extract(stats, '$.printer') AS printer, run_id FROM versions "
+        "SELECT summary, json_extract(stats, '$.printer') AS printer, provider, model, client FROM versions "
         "WHERE design_id=? ORDER BY version DESC",
         (design_id,),
     ).fetchall()
     runs = c.execute(
-        "SELECT prompt, provider, model FROM runs WHERE id IN "
+        "SELECT prompt FROM runs WHERE id IN "
         "(SELECT run_id FROM versions WHERE design_id=? AND run_id IS NOT NULL) ORDER BY started_at",
         (design_id,),
     ).fetchall()
@@ -172,8 +207,8 @@ def _reindex(c: sqlite3.Connection, design_id: str) -> None:
             join(tags),
             join(v["summary"] for v in versions),
             join(r["prompt"] for r in runs),
-            join(r["provider"] for r in runs),
-            join(r["model"] for r in runs),
+            join(x for v in versions for x in (v["provider"], v["client"])),
+            join(v["model"] for v in versions),
             join(v["printer"] for v in versions),
             d["source"],
         ),
@@ -193,15 +228,39 @@ def create_design(title: str, source: str = "studio") -> str:
     return did
 
 
-def add_version(design_id: str, scad: str, summary: str, stats: dict, run_id: str | None) -> int:
+def add_version(
+    design_id: str,
+    scad: str,
+    summary: str,
+    stats: dict,
+    run_id: str | None,
+    origin: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    client: str | None = None,
+) -> int:
+    """Store a new version. With a run_id the version is the agent's and its provider
+    and model are copied from the run; otherwise origin is "manual" unless given
+    ("mcp" with an optional self-reported client, provider and model)."""
+    origin = origin or ("agent" if run_id else "manual")
+    if origin not in ORIGINS:
+        raise ValueError(f"Unknown origin {origin!r}")
     with tx() as c:
         row = c.execute("SELECT current_version FROM designs WHERE id=?", (design_id,)).fetchone()
         if row is None:
             raise KeyError(design_id)
+        if run_id and not (provider or model):
+            run = c.execute("SELECT provider, model FROM runs WHERE id=?", (run_id,)).fetchone()
+            if run:
+                provider, model = run["provider"], run["model"]
         v = row["current_version"] + 1
         c.execute(
-            "INSERT INTO versions (design_id, version, scad, summary, stats, run_id, created_at) VALUES (?,?,?,?,?,?,?)",
-            (design_id, v, scad, summary, json.dumps(stats), run_id, time.time()),
+            "INSERT INTO versions (design_id, version, scad, summary, stats, run_id, created_at, origin, provider, model, client) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                design_id, v, scad, summary, json.dumps(stats), run_id, time.time(), origin,
+                (provider or "").strip()[:80] or None, (model or "").strip()[:120] or None, (client or "").strip()[:80] or None,
+            ),
         )
         c.execute("UPDATE designs SET current_version=?, updated_at=? WHERE id=?", (v, time.time(), design_id))
         _reindex(c, design_id)
@@ -259,12 +318,14 @@ def list_designs(
     where: list[str] = []
     args: list[Any] = []
     sql = (
-        "SELECT d.*, v.summary, v.stats, "
+        "SELECT d.*, v.summary, v.stats, v.origin, v.provider, v.model, v.client, "
+        "r.id AS run_id, r.input_tokens, r.output_tokens, r.cost_usd, r.cost_known, "
         "(SELECT json_group_array(tag) FROM (SELECT tag FROM design_tags WHERE design_id=d.id ORDER BY tag)) AS tags, "
         "(SELECT json_group_array(json_object('provider', provider, 'model', model)) FROM "
-        " (SELECT DISTINCT r.provider, r.model FROM versions rv JOIN runs r ON r.id=rv.run_id "
-        "  WHERE rv.design_id=d.id ORDER BY r.provider, r.model)) AS models "
+        " (SELECT DISTINCT provider, model FROM versions WHERE design_id=d.id AND model IS NOT NULL "
+        "  ORDER BY provider, model)) AS models "
         "FROM designs d LEFT JOIN versions v ON v.design_id=d.id AND v.version=d.current_version "
+        "LEFT JOIN runs r ON r.id=v.run_id "
     )
     if spec.has_text:
         sql += "JOIN design_fts f ON f.design_id=d.id "
@@ -276,8 +337,8 @@ def list_designs(
     for col, values in (("provider", spec.providers), ("model", spec.models)):
         for val in values:
             where.append(
-                "EXISTS (SELECT 1 FROM versions rv JOIN runs r ON r.id=rv.run_id "
-                f"WHERE rv.design_id=d.id AND lower(r.{col}) LIKE ? ESCAPE '\\')"
+                "EXISTS (SELECT 1 FROM versions rv "
+                f"WHERE rv.design_id=d.id AND lower(rv.{col}) LIKE ? ESCAPE '\\')"
             )
             args.append(_like(val))
     if spec.sources:
@@ -309,7 +370,26 @@ def list_designs(
         r["stats"] = json.loads(r["stats"] or "{}")
         r["tags"] = json.loads(r["tags"] or "[]")
         r["models"] = json.loads(r["models"] or "[]")
+        _attach_run(r)
     return rows
+
+
+def _attach_run(row: dict[str, Any]) -> None:
+    """Fold the generating run's usage columns into a nested "run" object (None when
+    the version was not produced by a Buildplate run)."""
+    keys = ("run_id", "input_tokens", "output_tokens", "cost_usd", "cost_known")
+    vals = {k: row.pop(k, None) for k in keys}
+    row["run"] = (
+        None
+        if vals["run_id"] is None
+        else {
+            "id": vals["run_id"],
+            "input_tokens": vals["input_tokens"],
+            "output_tokens": vals["output_tokens"],
+            "cost_usd": vals["cost_usd"],
+            "cost_known": bool(vals["cost_known"]),
+        }
+    )
 
 
 def facets() -> dict[str, Any]:
@@ -318,8 +398,8 @@ def facets() -> dict[str, Any]:
         tags = _rows(c.execute("SELECT tag, COUNT(*) AS count FROM design_tags GROUP BY tag ORDER BY count DESC, tag"))
         models = _rows(
             c.execute(
-                "SELECT r.provider, r.model, COUNT(DISTINCT v.design_id) AS count FROM versions v "
-                "JOIN runs r ON r.id=v.run_id GROUP BY r.provider, r.model ORDER BY r.provider, count DESC, r.model"
+                "SELECT COALESCE(provider, '') AS provider, model, COUNT(DISTINCT design_id) AS count FROM versions "
+                "WHERE model IS NOT NULL GROUP BY 1, 2 ORDER BY 1, count DESC, model"
             )
         )
         sources = _rows(c.execute("SELECT source, COUNT(*) AS count FROM designs GROUP BY source ORDER BY count DESC"))
@@ -373,7 +453,9 @@ def get_design(design_id: str) -> dict[str, Any] | None:
         design = dict(d)
         design["versions"] = _rows(
             c.execute(
-                "SELECT version, summary, stats, run_id, created_at FROM versions WHERE design_id=? ORDER BY version",
+                "SELECT v.version, v.summary, v.stats, v.created_at, v.origin, v.provider, v.model, v.client, "
+                "r.id AS run_id, r.input_tokens, r.output_tokens, r.cost_usd, r.cost_known "
+                "FROM versions v LEFT JOIN runs r ON r.id=v.run_id WHERE v.design_id=? ORDER BY v.version",
                 (design_id,),
             )
         )
@@ -386,6 +468,7 @@ def get_design(design_id: str) -> dict[str, Any] | None:
         design["tags"] = [r[0] for r in c.execute("SELECT tag FROM design_tags WHERE design_id=? ORDER BY tag", (design_id,))]
     for v in design["versions"]:
         v["stats"] = json.loads(v["stats"] or "{}")
+        _attach_run(v)
     return design
 
 
