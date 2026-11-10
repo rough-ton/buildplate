@@ -106,14 +106,23 @@ def system_prompt(vision: bool, hardware_mode: str | None = None) -> str:
     libs = ", ".join(lib["name"] for lib in openscad.list_libraries()) or "none"
     eng = openscad.detect()
     lines = [
-        "You are an expert mechanical designer who writes OpenSCAD for FDM 3D printing.",
+        "You are a senior 3D CAD designer and a senior structural engineer who writes OpenSCAD for FDM 3D printing.",
+        "Bring that judgment to every part, beyond whether it renders:",
+        "- Structure: find the load paths and stress concentrations; size walls, ribs, gussets and fillets for the",
+        "  real loads; avoid thin unsupported spans and sharp inside corners where the part will bend or crack.",
+        "- FDM behaviour: layers are weakest in tension across them, so orient the part (or split it) so loads run",
+        "  along the layers; mind bridging, elephant's foot, warping on long flat bases and shrinkage of holes.",
+        "- Materials and fit: choose clearances, press fits, snap-fit strain and screw-boss sizes that work in",
+        "  PLA/PETG, and model holes, threads and mating faces to function, not just to look right.",
+        "- Printability and use: a flat, stable first layer, minimal supports, and a shape that is easy to print,",
+        "  assemble and use.",
         "",
         "Rules for the code you write:",
         "- Units are millimetres. The part must rest on the bed: its lowest point at Z=0, centred near the origin in X/Y.",
         "- Make it parametric. Put user-tunable variables at the very top, before any module or function, using",
         "  OpenSCAD Customizer syntax: a comment line describing the parameter, then `name = value; // [min:step:max]`.",
         "  Group them with `/* [Section Name] */` headers. Put $fn and internal constants under `/* [Hidden] */`.",
-        "- Use modules for logical sub-parts and keep the code readable and commented.",
+        "- Use modules for logical sub-parts and keep the code readable, with brief comments.",
         (f"- Design for this printer: '{p['name']}', round bed {p['bed_x']:g} mm diameter, {p['bed_z']:g} mm tall build volume (delta),"
          if p.get("shape") == "round" else
          f"- Design for this printer: '{p['name']}', build volume {p['bed_x']:g} x {p['bed_y']:g} x {p['bed_z']:g} mm,"),
@@ -351,10 +360,15 @@ async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: st
     tool_mode = True
     tools = TOOLS + [LIST_PARTS_TOOL]
 
+    cache = method.runtime == "litellm" and _wants_cache_control(method, model)
+    pinned = len(messages)  # system prompt + earlier conversation: never compacted, so it stays cacheable
+
     for step in range(1, a["max_iterations"] + 1):
         yield {"type": "status", "message": f"Thinking (step {step} of {a['max_iterations']})"}
         t0 = time.time()
-        call = dict(kwargs, messages=messages, temperature=a["temperature"], max_tokens=a["max_output_tokens"])
+        _compact(messages, pinned)
+        sent = _with_cache_control(messages, pinned) if cache else messages
+        call = dict(kwargs, messages=sent, temperature=a["temperature"], max_tokens=a["max_output_tokens"])
         if tool_mode:
             call["tools"] = tools
             call["tool_choice"] = "auto"
@@ -451,6 +465,100 @@ async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: st
             messages.append({"role": "user", "content": content})
     if state["final"] is None and state["last_good"]:
         state["final"] = {"code": state["last_good"]["code"], "title": "", "summary": "Stopped at the step limit; saved the last design that rendered."}
+
+
+CODE_TOOLS = ("check_design", "submit_design")
+OMITTED_CODE = "// earlier revision omitted: superseded by the latest code below"
+OMITTED_IMAGE = "(earlier preview image omitted: superseded by the latest preview)"
+_FENCE = re.compile(r"```(?:openscad|scad)?\s*\n.*?```", re.S)
+
+
+def _gist(report: str) -> str:
+    """A superseded check report, cut to the lines worth remembering."""
+    if report.startswith("(superseded"):
+        return report
+    keep = [ln for ln in report.splitlines() if ln.startswith(("Render", "Issues:", "Not saved"))][:3]
+    return "(superseded by a later check) " + " | ".join(ln[:240] for ln in keep)
+
+
+def _compact(messages: list[dict[str, Any]], start: int) -> None:
+    """Within one run the model only needs the current code, report and preview to
+    decide its next fix. Shrink every earlier revision in place: code in earlier tool
+    calls and text-mode replies, their check reports and their preview images. Messages
+    before start (system prompt, earlier conversation) are left alone. Running it again
+    is a no-op."""
+    latest = None
+    for i in range(len(messages) - 1, start - 1, -1):
+        m = messages[i]
+        if m["role"] == "assistant" and (
+            any(tc["function"]["name"] in CODE_TOOLS for tc in m.get("tool_calls") or [])
+            or (isinstance(m.get("content"), str) and _FENCE.search(m["content"]))
+        ):
+            latest = i
+            break
+    if latest is None:
+        return
+
+    code_calls: set[str] = set()
+    for m in messages[start:latest]:
+        if m["role"] == "assistant":
+            for tc in m.get("tool_calls") or []:
+                fn = tc["function"]
+                if fn["name"] not in CODE_TOOLS:
+                    continue
+                code_calls.add(tc["id"])
+                try:
+                    args = json.loads(fn["arguments"] or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                if args.get("code") != OMITTED_CODE:
+                    fn["arguments"] = json.dumps({**args, "code": OMITTED_CODE})
+            if isinstance(m.get("content"), str):
+                m["content"] = _FENCE.sub("```openscad\n" + OMITTED_CODE + "\n```", m["content"])
+        elif m["role"] == "tool" and m.get("tool_call_id") in code_calls and isinstance(m.get("content"), str):
+            m["content"] = _gist(m["content"])
+        elif m["role"] == "user" and isinstance(m.get("content"), list):
+            texts = [c["text"] for c in m["content"] if c.get("type") == "text"]
+            if any(c.get("type") == "image_url" for c in m["content"]):
+                body = "\n".join(t for t in texts if not t.startswith("Preview render"))
+                m["content"] = (_gist(body) + "\n" if body.startswith("Render") else body + "\n" if body else "") + OMITTED_IMAGE
+        elif m["role"] == "user" and isinstance(m.get("content"), str) and m["content"].startswith("Render"):
+            m["content"] = _gist(m["content"])  # a text-mode check report
+
+
+_CACHE_FAMILIES = ("bedrock", "vertex_ai", "openrouter", "azure_ai")
+
+
+def _wants_cache_control(method, model: str) -> bool:
+    """Anthropic models only cache a prompt at explicit cache_control breakpoints;
+    OpenAI, Gemini and most others cache automatically and need nothing."""
+    return method.family == "anthropic" or (method.family in _CACHE_FAMILIES and "claude" in model.lower())
+
+
+def _with_cache_control(messages: list[dict[str, Any]], pinned: int) -> list[dict[str, Any]]:
+    """A copy of messages with prompt-cache breakpoints on the system prompt, the end
+    of the earlier conversation (which carries the current design code) and the end of
+    the compacted part of this run. None of those change for the rest of the run, so
+    each later step reads them from the cache instead of paying for them again."""
+    marks = {0, pinned - 1}
+    i = len(messages) - 1
+    while i >= pinned and messages[i]["role"] != "assistant":
+        i -= 1  # the newest assistant turn and its results change on the next step
+    if i - 1 >= pinned:
+        marks.add(i - 1)
+    out = list(messages)
+    for i in sorted(marks):
+        m = dict(messages[i])
+        if m["role"] == "tool":
+            m["cache_control"] = {"type": "ephemeral"}
+        elif isinstance(m.get("content"), str) and m["content"]:
+            m["content"] = [{"type": "text", "text": m["content"], "cache_control": {"type": "ephemeral"}}]
+        elif isinstance(m.get("content"), list) and m["content"]:
+            m["content"] = m["content"][:-1] + [dict(m["content"][-1], cache_control={"type": "ephemeral"})]
+        else:
+            continue  # an assistant turn that only calls tools
+        out[i] = m
+    return out
 
 
 async def _check(code: str, want_image: bool) -> tuple[str, dict[str, Any], str | None]:

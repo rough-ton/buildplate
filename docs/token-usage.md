@@ -21,7 +21,9 @@ One request usually takes two to four model calls. A typical run:
 | 2 | Reads the check report and preview, fixes problems | Larger input (includes the image) |
 | 3 | Confirms and submits | Larger input, small output |
 
-Input grows with each step because the model sees the whole conversation so far, including earlier code and previews.
+Input grows with each step because the model sees the conversation so far. Within a request, only the latest code, check report and preview image are sent in full: earlier revisions are replaced by a short note (what the check found), so a fix-and-recheck cycle does not resend every earlier draft and image. On a five-cycle run this cuts input tokens roughly in half.
+
+For Claude models (Anthropic API, and Claude on Bedrock, Vertex AI, OpenRouter or Microsoft Foundry), Buildplate marks the system prompt, your request and the already-compacted part of the run for prompt caching, so later steps read them from the cache at the lower cached rate. Other providers (OpenAI, Gemini and most others) cache automatically. Short requests may be below a model's minimum cacheable size, in which case nothing is cached.
 
 **Input tokens** always means all the input the model read, including tokens served from the provider's prompt cache. **Cached** is the part of that input read from the cache, which is billed at a lower rate. This is the same for every connection, so totals can be compared across providers.
 
