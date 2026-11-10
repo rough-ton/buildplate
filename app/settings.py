@@ -1,8 +1,12 @@
 """Live settings store.
 
 Settings are persisted to /data/settings.json and read on every use, so changes made
-in the web UI (API keys, models, printer profile, limits) take effect immediately with
-no restart or rebuild. Secrets are encrypted at rest with a per-install key.
+in the web UI (AI connections, models, printer profile, limits) take effect immediately
+with no restart or rebuild. Secrets are encrypted at rest with a per-install key.
+
+AI access is configured as a list of connections (see connections.py and
+auth_methods.py). Settings files from before connections had one "providers" entry per
+provider; they are converted on load.
 """
 
 from __future__ import annotations
@@ -19,10 +23,12 @@ from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from . import config
+from . import auth_methods, config
 
-SECRET_FIELDS = {"api_key", "mcp_token"}
+SETTINGS_VERSION = 2
 
+# Pre-connections provider metadata. Only used to serve the read-only compatibility
+# view of the old "providers" settings shape for one release.
 PROVIDERS: dict[str, dict[str, Any]] = {
     "anthropic": {
         "label": "Anthropic (Claude)",
@@ -69,12 +75,11 @@ PROVIDERS: dict[str, dict[str, Any]] = {
 }
 
 DEFAULTS: dict[str, Any] = {
-    "providers": {
-        pid: {"enabled": False, "api_key": "", "base_url": meta["default_base_url"], "models": []}
-        for pid, meta in PROVIDERS.items()
-    },
+    # Each: {id, method, label, enabled, fields, secrets, models, status}. secrets values
+    # are encrypted on disk; see connections.py.
+    "connections": [],
     "agent": {
-        "provider": "",
+        "connection": "",
         "model": "",
         "max_iterations": 6,
         "temperature": 0.2,
@@ -169,6 +174,44 @@ def active_printer(s: dict[str, Any]) -> dict[str, Any]:
     return s["printers"][0]
 
 
+def _migrate_connections(s: dict[str, Any]) -> bool:
+    """Settings version 1 had one "providers" entry per provider id and an agent
+    provider. Turn every provider that has a saved key or was enabled into a
+    connection (keeping its already-encrypted key), and point the agent at it."""
+    if int(s.get("settings_version") or 1) >= SETTINGS_VERSION:
+        return False
+    old = s.pop("providers", None) or {}
+    active = s["agent"].pop("provider", "") or ""
+    conns = s.setdefault("connections", [])
+    have = {c["id"] for c in conns}
+    for pid, p in old.items():
+        method_id = auth_methods.LEGACY_PROVIDERS.get(pid)
+        if not method_id or not isinstance(p, dict) or not (p.get("api_key") or p.get("enabled")):
+            continue
+        method = auth_methods.METHODS[method_id]
+        cid = f"c_{pid}"
+        if cid in have:
+            continue
+        names = {f.name for f in method.fields}
+        conns.append(
+            {
+                "id": cid,
+                "method": method_id,
+                "label": method.family_label,
+                "enabled": bool(p.get("enabled")),
+                "fields": {"base_url": p["base_url"]} if "base_url" in names and p.get("base_url") else {},
+                "secrets": {"api_key": p["api_key"]} if "api_key" in names and p.get("api_key") else {},
+                "models": list(p.get("models") or []),
+                "status": {"state": "connected" if p.get("models") else "untested", "detail": "", "checked_at": 0},
+            }
+        )
+    ids = {c["id"] for c in conns}
+    if not s["agent"].get("connection") and f"c_{active}" in ids:
+        s["agent"]["connection"] = f"c_{active}"
+    s["settings_version"] = SETTINGS_VERSION
+    return True
+
+
 def _deep_merge(base: dict, override: dict) -> dict:
     out = copy.deepcopy(base)
     for k, v in (override or {}).items():
@@ -233,7 +276,9 @@ class SettingsStore:
                         raw = {}
                 self._cache = _deep_merge(DEFAULTS, raw)
                 self._mtime = mtime
-                if _migrate_printers(self._cache) and config.SETTINGS_FILE.exists():
+                migrated = _migrate_connections(self._cache)
+                migrated = _migrate_printers(self._cache) or migrated
+                if migrated and config.SETTINGS_FILE.exists():
                     self._write(self._cache)
                 self._apply_env_bootstrap()
             return self._cache
@@ -243,22 +288,31 @@ class SettingsStore:
         s = self._cache
         assert s is not None
         changed = False
-        env_keys = {
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-            "openrouter": "OPENROUTER_API_KEY",
-        }
-        for pid, var in env_keys.items():
-            val = os.environ.get(var)
-            if val and not s["providers"][pid]["api_key"]:
-                s["providers"][pid]["api_key"] = self._enc(val)
-                s["providers"][pid]["enabled"] = True
-                changed = True
-        if os.environ.get("OLLAMA_BASE_URL") and not s["providers"]["ollama"]["enabled"]:
-            s["providers"]["ollama"]["base_url"] = os.environ["OLLAMA_BASE_URL"]
-            s["providers"]["ollama"]["enabled"] = True
+        methods_in_use = {c["method"] for c in s["connections"]}
+
+        def seed(method_id: str, cid: str, fields: dict[str, str], secrets_: dict[str, str]) -> None:
+            nonlocal changed
+            if method_id in methods_in_use or any(c["id"] == cid for c in s["connections"]):
+                return
+            s["connections"].append(
+                {
+                    "id": cid,
+                    "method": method_id,
+                    "label": auth_methods.METHODS[method_id].family_label,
+                    "enabled": True,
+                    "fields": fields,
+                    "secrets": {k: self._enc(v) for k, v in secrets_.items()},
+                    "models": [],
+                    "status": {"state": "untested", "detail": "Added from an environment variable", "checked_at": 0},
+                }
+            )
             changed = True
+
+        for var, method_id in ENV_KEYS.items():
+            if os.environ.get(var):
+                seed(method_id, f"c_env_{method_id.split('.')[0]}", {}, {"api_key": os.environ[var]})
+        if os.environ.get("OLLAMA_BASE_URL"):
+            seed("ollama.local", "c_env_ollama", {"base_url": os.environ["OLLAMA_BASE_URL"]}, {})
         if os.environ.get("BUILDPLATE_ADMIN_PASSWORD") and not s["security"]["ui_password_hash"]:
             s["security"]["ui_password_hash"] = hash_password(os.environ["BUILDPLATE_ADMIN_PASSWORD"])
             changed = True
@@ -278,11 +332,14 @@ class SettingsStore:
         self._mtime = config.SETTINGS_FILE.stat().st_mtime
 
     # ---- public API --------------------------------------------------------
+    def encrypt(self, value: str) -> str:
+        return self._enc(value)
+
     def get(self) -> dict[str, Any]:
         """Full settings with secrets decrypted. Server-side use only."""
         data = copy.deepcopy(self._read())
-        for p in data["providers"].values():
-            p["api_key"] = self._dec(p.get("api_key", ""))
+        for c in data["connections"]:
+            c["secrets"] = {k: self._dec(v) for k, v in (c.get("secrets") or {}).items()}
         data["security"]["mcp_token"] = self._dec(data["security"].get("mcp_token", ""))
         data["printer"] = copy.deepcopy(active_printer(data))
         return data
@@ -290,11 +347,10 @@ class SettingsStore:
     def public(self) -> dict[str, Any]:
         """Settings safe to send to the browser: secrets are masked."""
         data = self.get()
-        for pid, p in data["providers"].items():
-            key = p.pop("api_key", "")
-            p["api_key_set"] = bool(key)
-            p["api_key_hint"] = ("****" + key[-4:]) if len(key) >= 8 else ("set" if key else "")
-            p["meta"] = PROVIDERS[pid]
+        data["connections"] = [public_connection(c) for c in data["connections"]]
+        data["providers"] = _legacy_providers_view(data)
+        active = next((c for c in data["connections"] if c["id"] == data["agent"]["connection"]), None)
+        data["agent"]["provider"] = active["family"] if active else ""
         sec = data["security"]
         sec["password_enabled"] = bool(sec.pop("ui_password_hash", ""))
         token = sec.pop("mcp_token", "")
@@ -309,11 +365,11 @@ class SettingsStore:
             current = copy.deepcopy(self._read())
             patch = copy.deepcopy(patch)
             patch.get("security", {}).pop("ui_password_hash", None)
-            for pid, p in (patch.get("providers") or {}).items():
-                if pid not in PROVIDERS:
-                    raise ValueError(f"Unknown provider: {pid}")
-                if "api_key" in p:
-                    p["api_key"] = self._enc(p["api_key"].strip()) if p["api_key"] else ""
+            # Connections change only through connections.py, which handles encryption.
+            patch.pop("connections", None)
+            patch.pop("settings_version", None)
+            if "providers" in patch:
+                raise ValueError("AI providers are now connections. Use /api/connections.")
             if "mcp_token" in patch.get("security", {}):
                 tok = patch["security"]["mcp_token"]
                 patch["security"]["mcp_token"] = self._enc(tok) if tok else ""
@@ -328,6 +384,18 @@ class SettingsStore:
             _validate(merged)
             self._write(merged)
         return self.public()
+
+    def set_connections(self, conns: list[dict[str, Any]]) -> None:
+        """Replace the connection list. secrets values are plain text and get encrypted."""
+        with self._lock:
+            current = copy.deepcopy(self._read())
+            current["connections"] = [
+                {**c, "secrets": {k: self._enc(v) for k, v in (c.get("secrets") or {}).items() if v}} for c in conns
+            ]
+            ids = {c["id"] for c in conns}
+            if current["agent"].get("connection") not in ids:
+                current["agent"]["connection"] = ""
+            self._write(current)
 
     def set_password(self, password: str) -> None:
         with self._lock:
@@ -386,8 +454,9 @@ def _validate(s: dict[str, Any]) -> None:
     a["preview_size"] = max(256, min(int(a["preview_size"]), 2048))
     if a["vision"] not in ("auto", "on", "off"):
         a["vision"] = "auto"
-    if a["provider"] and a["provider"] not in PROVIDERS:
-        raise ValueError("Unknown active provider")
+    a.pop("provider", None)
+    if a.get("connection") and a["connection"] not in {c["id"] for c in s["connections"]}:
+        raise ValueError("Unknown connection for the design agent")
     r = s["render"]
     r["timeout"] = max(10, min(int(r["timeout"]), 1800))
     r["max_parallel"] = max(1, min(int(r["max_parallel"]), 16))
@@ -395,6 +464,59 @@ def _validate(s: dict[str, Any]) -> None:
         r["backend"] = "auto"
     s.pop("printer", None)
     _validate_printers(s)
+
+
+ENV_KEYS = {
+    "ANTHROPIC_API_KEY": "anthropic.api_key",
+    "OPENAI_API_KEY": "openai.api_key",
+    "GEMINI_API_KEY": "gemini.api_key",
+    "OPENROUTER_API_KEY": "openrouter.api_key",
+    "XAI_API_KEY": "xai.api_key",
+    "MISTRAL_API_KEY": "mistral.api_key",
+    "GROQ_API_KEY": "groq.api_key",
+    "DEEPSEEK_API_KEY": "deepseek.api_key",
+}
+
+
+def mask(value: str) -> str:
+    return ("****" + value[-4:]) if len(value) >= 8 else ("set" if value else "")
+
+
+def public_connection(c: dict[str, Any]) -> dict[str, Any]:
+    """A connection safe for the browser: secrets become {set, hint}."""
+    method = auth_methods.METHODS.get(c["method"])
+    out = {k: copy.deepcopy(v) for k, v in c.items() if k != "secrets"}
+    out["secrets"] = {}
+    for name in sorted((method.secret_fields if method else set()) | set(c.get("secrets") or {})):
+        val = (c.get("secrets") or {}).get(name, "")
+        out["secrets"][name] = {"set": bool(val), "hint": mask(val)}
+    out["family"] = method.family if method else ""
+    out["billing"] = method.billing if method else ""
+    out["method_label"] = method.label if method else c["method"]
+    return out
+
+
+def _legacy_providers_view(data: dict[str, Any]) -> dict[str, Any]:
+    """The pre-connections "providers" shape, derived from the first connection of each
+    legacy method. Read-only, kept for one release for API clients and the UI."""
+    out = {}
+    for pid, meta in PROVIDERS.items():
+        method_id = auth_methods.LEGACY_PROVIDERS[pid]
+        c = next((x for x in data["connections"] if x["method"] == method_id), None)
+        key = (c or {}).get("secrets", {}).get("api_key", {})
+        out[pid] = {
+            "enabled": bool(c and c.get("enabled")),
+            "base_url": ((c or {}).get("fields") or {}).get("base_url") or meta["default_base_url"],
+            "models": list((c or {}).get("models") or []),
+            "api_key_set": bool(key.get("set")),
+            "api_key_hint": key.get("hint", ""),
+            "connection": c["id"] if c else "",
+            "meta": meta,
+        }
+    # labels for the newer provider families too, so the UI can name any run's provider
+    for m in auth_methods.METHODS.values():
+        out.setdefault(m.family, {"enabled": False, "base_url": "", "models": [], "api_key_set": False, "api_key_hint": "", "connection": "", "meta": {"label": m.family_label}})
+    return out
 
 
 def hash_password(password: str) -> str:

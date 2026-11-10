@@ -14,7 +14,8 @@ import re
 import time
 from typing import Any, AsyncIterator
 
-from . import db, openscad, providers
+from . import connections, db, openscad, providers
+from .auth_methods import MethodError
 from .settings import store
 
 TOOLS = [
@@ -140,26 +141,35 @@ async def run(
     prompt: str,
     design_id: str | None = None,
     current_code: str | None = None,
-    provider: str | None = None,
+    connection: str | None = None,
     model: str | None = None,
     source: str = "studio",
+    provider: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
+    """Run the design loop. connection and model default to the design agent's
+    settings; provider (a provider family) is the pre-connections way to choose and
+    picks the first enabled connection of that family."""
     import litellm
 
     litellm.suppress_debug_info = True
     litellm.drop_params = True
 
     try:
-        provider, model, kwargs = providers.resolve(provider, model)
-    except providers.ProviderError as exc:
+        target = connections.resolve(connection, model, provider)
+    except MethodError as exc:
         yield {"type": "error", "message": str(exc)}
         return
+    method, model, kwargs = target.method, target.model, target.kwargs
+    provider = method.family
 
     settings = store.get()
     a = settings["agent"]
-    vision = providers.supports_vision(provider, model)
-    run_id = db.start_run(design_id, prompt, provider, model, source)
-    yield {"type": "run", "run_id": run_id, "provider": provider, "model": model, "vision": vision, "design_id": design_id}
+    vision = providers.supports_vision(method, model)
+    run_id = db.start_run(design_id, prompt, provider, model, source, target.id, method.id, method.billing)
+    yield {
+        "type": "run", "run_id": run_id, "provider": provider, "model": model, "vision": vision, "design_id": design_id,
+        "connection": target.id, "connection_label": target.connection["label"], "billing": method.billing,
+    }
 
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(vision)}]
     messages += _history(design_id, current_code, prompt)
@@ -194,7 +204,7 @@ async def run(
                     yield {"type": "status", "message": "Model has no tool support; switching to text mode"}
                     continue
                 raise
-            usage = providers.usage_from_response(resp, provider, model)
+            usage = providers.usage_from_response(resp, method, model)
             for k in totals:
                 if k == "cost_known":
                     totals[k] = totals[k] and usage["cost_known"]
@@ -375,7 +385,7 @@ def _friendly(exc: Exception) -> str:
     msg = str(exc)
     low = msg.lower()
     if "authentication" in low or "401" in low or "invalid x-api-key" in low or "api key" in low:
-        return "The provider rejected the API key. Update it in Settings > AI Providers."
+        return "The provider rejected the API key. Update the connection in Settings > AI connections."
     if "rate limit" in low or "429" in low:
         return "The provider rate-limited this request. Wait a moment and try again."
     if "connection" in low and ("refused" in low or "error" in low):
