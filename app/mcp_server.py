@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import Image, MCPServer
 
-from . import agent, config, db, openscad, printers
+from . import agent, config, db, openscad, printers, search
 from .settings import store
 
 mcp = MCPServer(
@@ -58,13 +58,16 @@ async def preview(code: str, views: list[str] | None = None) -> Image:
     return Image(data=png, format="png")
 
 
-@mcp.tool(description="Validate and save OpenSCAD code to the Buildplate library. Pass design_id to add a new version to an existing design. Returns download links.")
-async def save_design(code: str, title: str, summary: str = "", design_id: str | None = None) -> dict[str, Any]:
+@mcp.tool(description="Validate and save OpenSCAD code to the Buildplate library. Pass design_id to add a new version to an existing design, and optionally tags to label it. Returns download links.")
+async def save_design(
+    code: str, title: str, summary: str = "", design_id: str | None = None, tags: list[str] | None = None
+) -> dict[str, Any]:
     res, stats = await openscad.validate(code)
     if not design_id or not db.get_design(design_id):
         design_id = db.create_design(title, "mcp")
     version = db.add_version(design_id, code, summary, stats, None)
-    return {"design_id": design_id, "version": version, "stats": stats, "downloads": _links(design_id, version)}
+    out_tags = db.add_tags(design_id, tags) if tags else db.get_tags(design_id)
+    return {"design_id": design_id, "version": version, "tags": out_tags, "stats": stats, "downloads": _links(design_id, version)}
 
 
 @mcp.tool(description="Run Buildplate's built-in design agent on a natural-language request using its configured AI model. Token usage is tracked in Buildplate. Pass design_id to modify an existing design.")
@@ -81,6 +84,7 @@ async def generate_design(prompt: str, design_id: str | None = None) -> dict[str
         "version": done["version"],
         "title": done["title"],
         "summary": done["summary"],
+        "tags": done["tags"],
         "stats": done["stats"],
         "tokens": done["totals"],
         "code": done["code"],
@@ -88,12 +92,61 @@ async def generate_design(prompt: str, design_id: str | None = None) -> dict[str
     }
 
 
-@mcp.tool(description="List saved designs, newest first. Optional title search.")
-async def list_designs(query: str = "", limit: int = 25) -> list[dict[str, Any]]:
+@mcp.tool(
+    description=(
+        "Search saved designs. query is free text matched against title, summary, tags, the prompt, "
+        "provider and model, and may include qualifiers: tag:garage provider:ollama model:qwen source:mcp "
+        "printer:x1c size:<100 w:<50 d:>20 h:20..40 after:2026-10-01 before:2026-11. The other arguments "
+        "are the same filters: tags (comma-separated, all required), size in mm of the largest dimension, "
+        "dates as YYYY-MM-DD. sort: relevance (default with free text), updated (default otherwise), "
+        "created, title, largest or smallest."
+    )
+)
+async def list_designs(
+    query: str = "",
+    tags: str = "",
+    provider: str = "",
+    model: str = "",
+    source: str = "",
+    printer: str = "",
+    min_size: float | None = None,
+    max_size: float | None = None,
+    after: str = "",
+    before: str = "",
+    sort: str = "",
+    limit: int = 25,
+) -> list[dict[str, Any]] | dict[str, str]:
+    try:
+        f = search.filters(tags, provider, model, source, printer, min_size, max_size, after, before)
+        rows = db.list_designs(limit, query, f, sort)
+    except ValueError as exc:
+        return {"error": str(exc)}
     return [
-        {"design_id": d["id"], "title": d["title"], "version": d["current_version"], "updated_at": d["updated_at"]}
-        for d in db.list_designs(limit, query)
+        {
+            "design_id": d["id"],
+            "title": d["title"],
+            "version": d["current_version"],
+            "summary": d["summary"],
+            "tags": d["tags"],
+            "source": d["source"],
+            "models": d["models"],
+            "size_mm": d["stats"].get("size_mm"),
+            "printer": d["stats"].get("printer"),
+            "created_at": d["created_at"],
+            "updated_at": d["updated_at"],
+        }
+        for d in rows
     ]
+
+
+@mcp.tool(description="Replace the tags on a saved design. Tags are lowercased; pass an empty list to clear them.")
+async def set_design_tags(design_id: str, tags: list[str]) -> dict[str, Any]:
+    try:
+        return {"design_id": design_id, "tags": db.set_tags(design_id, tags)}
+    except KeyError:
+        return {"error": "Design not found"}
+    except ValueError as exc:
+        return {"error": str(exc)}
 
 
 @mcp.tool(description="Get the OpenSCAD source of a saved design (latest version unless version is given).")
@@ -101,7 +154,7 @@ async def get_design(design_id: str, version: int | None = None) -> dict[str, An
     v = db.get_version(design_id, version)
     if not v:
         return {"error": "Design not found"}
-    return {"design_id": design_id, "version": v["version"], "code": v["scad"], "stats": v["stats"], "downloads": _links(design_id, v["version"])}
+    return {"design_id": design_id, "version": v["version"], "code": v["scad"], "tags": db.get_tags(design_id), "stats": v["stats"], "downloads": _links(design_id, v["version"])}
 
 
 @mcp.tool(description="Extract Customizer parameters (name, value, range, options) from OpenSCAD code.")
