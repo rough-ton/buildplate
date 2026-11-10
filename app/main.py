@@ -9,6 +9,7 @@ import platform
 import re
 import contextlib
 import shutil
+import time
 from contextlib import asynccontextmanager
 from importlib import metadata
 from typing import Any
@@ -251,6 +252,10 @@ async def delete_connection(cid: str, request: Request):
     _admin(request, cid=cid)
     if connections.get(cid)["method"] == "anthropic.claude_code":
         await claude_code.forget(cid)  # sign out through Claude Code and drop its folder
+    if connections.get(cid)["method"] == "openai.chatgpt":
+        from . import chatgpt
+
+        chatgpt.forget(cid, keep_registration=False)
     _conn_errors(connections.delete, cid)
     return {"ok": True}
 
@@ -325,11 +330,51 @@ async def oauth_openrouter_callback(request: Request, state: str = "", code: str
     return RedirectResponse("/#/settings/oauth-ok", status_code=303)
 
 
+class ChatGPTFinishBody(BaseModel):
+    url: str = Field(min_length=1, max_length=8000)
+
+
+@app.post("/api/connections/{cid}/chatgpt/start")
+async def chatgpt_start(cid: str, request: Request):
+    """Start Sign in with ChatGPT. Returns OpenAI's sign-in URL; the browser comes back
+    to a 127.0.0.1 address the user pastes into chatgpt/finish."""
+    from . import chatgpt
+
+    _admin(request, cid=cid)
+    if connections.get(cid)["method"] != "openai.chatgpt":
+        raise HTTPException(400, "This connection does not use Sign in with ChatGPT.")
+    return {"url": chatgpt.start(cid), "redirect_uri": chatgpt.REDIRECT_URI}
+
+
+@app.post("/api/connections/{cid}/chatgpt/finish")
+async def chatgpt_finish(cid: str, body: ChatGPTFinishBody, request: Request):
+    from . import chatgpt
+
+    _admin(request, cid=cid)
+    if connections.get(cid)["method"] != "openai.chatgpt":
+        raise HTTPException(400, "This connection does not use Sign in with ChatGPT.")
+    try:
+        result = await chatgpt.finish(cid, body.url)
+    except chatgpt.ChatGPTError as exc:
+        raise HTTPException(400, str(exc))
+    try:
+        await connections.test(cid)
+    except auth_methods.MethodError:
+        pass  # recorded on the connection
+    return {"first_time": result["first_time"], "connection": public_connection(connections.get(cid))}
+
+
 @app.post("/api/connections/{cid}/sign-out")
 async def sign_out_connection(cid: str, request: Request):
     _admin(request, cid=cid)
+    if connections.get(cid)["method"] == "openai.chatgpt":
+        from . import chatgpt
+
+        chatgpt.forget(cid)
+        connections.mark(cid, "needs_sign_in", "Signed out.")
+        return {"connection": public_connection(connections.get(cid))}
     if connections.get(cid)["method"] != "anthropic.claude_code":
-        raise HTTPException(400, "Only Claude plan connections sign out.")
+        raise HTTPException(400, "Only plan connections sign out.")
     try:
         await claude_code.logout(cid)
     except claude_code.ClaudeCodeError as exc:
@@ -345,8 +390,13 @@ async def plan_usage(cid: str, refresh: bool = False):
         conn = connections.get(cid)
     except KeyError:
         raise HTTPException(404, "No connection with that id")
+    if conn["method"] == "openai.chatgpt":
+        from . import chatgpt
+
+        # ChatGPT does not share plan meters with apps; OpenAI asks apps to link to its usage page
+        return {"report": None, "text": "", "manage_url": chatgpt.MANAGE_USAGE_URL, "fetched_at": time.time(), "plan_limit": None}
     if conn["method"] != "anthropic.claude_code":
-        raise HTTPException(400, "Only Claude plan connections have plan usage.")
+        raise HTTPException(400, "Only plan connections have plan usage.")
     try:
         report = await claude_code.plan_usage(cid, refresh=refresh)
     except claude_code.ClaudeCodeError as exc:

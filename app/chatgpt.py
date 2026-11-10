@@ -59,6 +59,11 @@ TERMINAL_REFRESH = {"invalid_grant", "invalid_refresh_token", "token_expired", "
                     "refresh_token_invalidated", "refresh_token_reused"}
 
 
+def _client(**kw: Any) -> httpx.AsyncClient:
+    """HTTP client for OpenAI (one place, so tests can stub it)."""
+    return httpx.AsyncClient(**kw)
+
+
 class ChatGPTError(MethodError):
     """Shown to the user. connection_state marks the connection (needs_sign_in);
     manage_url points at ChatGPT's usage settings for limit errors."""
@@ -212,7 +217,7 @@ async def finish(cid: str, pasted: str) -> dict[str, Any]:
     elif params.get("client_id") and params["client_id"] != client_id:
         raise ChatGPTError("That sign-in belongs to a different registration. Try again.")
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with _client(timeout=30) as client:
         r = await client.post(TOKEN_URL, data={"grant_type": "authorization_code", "client_id": client_id, "code": code,
                                                "code_verifier": pending["verifier"], "redirect_uri": REDIRECT_URI, "resource": RESOURCE})
     if r.status_code != 200:
@@ -249,7 +254,7 @@ _jwks: dict[str, Any] = {}
 
 async def _keys() -> list[dict[str, Any]]:
     if not _jwks or time.time() - _jwks.get("at", 0) > 3600:
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with _client(timeout=20) as client:
             r = await client.get(JWKS_URL)
             r.raise_for_status()
         _jwks.update(keys=r.json().get("keys", []), at=time.time())
@@ -309,7 +314,7 @@ async def access_token(cid: str) -> str:
         rec = load(cid)  # another request may have refreshed while we waited
         if float(rec.get("expires_at", 0)) - time.time() > 120:
             return rec["access_token"]
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with _client(timeout=30) as client:
             r = await client.post(TOKEN_URL, data={"grant_type": "refresh_token", "client_id": rec["client_id"],
                                                    "refresh_token": rec.get("refresh_token", ""), "resource": RESOURCE})
         if r.status_code != 200:
@@ -329,7 +334,7 @@ async def access_token(cid: str) -> str:
 
 async def list_models(cid: str) -> list[str]:
     token = await access_token(cid)
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with _client(timeout=20) as client:
         r = await client.get(f"{API}/models", headers={"Authorization": f"Bearer {token}"})
     if r.status_code != 200:
         raise _api_error(r.status_code, _error_code(r))
@@ -416,7 +421,7 @@ async def acompletion(cid: str, *, model: str, messages: list[dict[str, Any]], t
     token = await access_token(cid)
     body = {"model": model, **to_responses(messages, tools)}
     text, calls, usage, failure = [], [], {}, None
-    async with httpx.AsyncClient(timeout=httpx.Timeout(30, read=300)) as client:
+    async with _client(timeout=httpx.Timeout(30, read=300)) as client:
         async with client.stream("POST", f"{API}/responses", json=body,
                                  headers={"Authorization": f"Bearer {token}", "Accept": "text/event-stream"}) as r:
             if r.status_code != 200:

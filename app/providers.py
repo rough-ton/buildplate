@@ -47,14 +47,14 @@ def usage_from_response(resp: Any, method: AuthMethod, model: str) -> dict[str, 
     cost, known = 0.0, True
     if ov:
         cost = inp / 1e6 * float(ov.get("input", 0)) + out / 1e6 * float(ov.get("output", 0))
-    elif method.billing == "local":
-        cost = 0.0
+    elif method.billing in ("local", "subscription"):
+        cost = 0.0  # free, or included in the user's plan (the estimate is kept separately)
     else:
         try:
             cost = float(litellm.completion_cost(completion_response=resp) or 0.0)
         except Exception:
             cost, known = 0.0, False
-    return {
+    out_usage = {
         "input_tokens": inp,
         "output_tokens": out,
         "cache_read_tokens": cache_read,
@@ -63,6 +63,9 @@ def usage_from_response(resp: Any, method: AuthMethod, model: str) -> dict[str, 
         "cost_usd": round(cost, 6),
         "cost_known": known,
     }
+    if method.billing == "subscription":
+        out_usage["est_cost_usd"] = estimate_cost(method.family, model, out_usage)
+    return out_usage
 
 
 def _price(family: str, model: str) -> dict[str, Any] | None:

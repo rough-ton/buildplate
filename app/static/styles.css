@@ -527,3 +527,9 @@ dialog.pp.term { width: min(900px, calc(100vw - 32px)); height: fit-content; max
 .about-text { flex: 1; min-width: 240px; }
 .about-text p { margin: 0 0 8px; color: var(--ink-2); max-width: 60ch; }
 .about-sub { font-size: 14px; font-weight: 600; margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* ---------- Sign in with ChatGPT ---------- */
+.chatgpt-btn { background: #000; color: #fff; border-color: #000; }
+.chatgpt-btn:hover { background: #222; color: #fff; filter: none; }
+.chatgpt-steps p { margin: 12px 0 8px; }
+.chatgpt-steps textarea { width: 100%; }

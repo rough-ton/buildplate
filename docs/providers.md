@@ -11,6 +11,7 @@ Connections live in **Settings > AI connections** and take effect immediately.
 | Anthropic | Claude API key | API key | Pay per use | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | Anthropic | Claude plan (Claude Code) | Nothing: you sign in to Claude | Uses your plan | A Claude Pro, Max, Team or Enterprise plan. See [below](#claude-plan) |
 | OpenAI | OpenAI API key | API key | Pay per use | [platform.openai.com](https://platform.openai.com/api-keys) |
+| OpenAI | ChatGPT plan (Sign in with ChatGPT) | Nothing: you sign in to ChatGPT | Uses your plan | A ChatGPT Plus or Pro plan. See [below](#chatgpt-plan) |
 | Google Gemini | Gemini API key | API key | Pay per use | [aistudio.google.com](https://aistudio.google.com/apikey) |
 | OpenRouter | OpenRouter API key | API key | Pay per use | [openrouter.ai](https://openrouter.ai/keys) |
 | OpenRouter | Sign in with OpenRouter | Nothing: you sign in on OpenRouter | Pay per use | An OpenRouter account. See [below](#sign-in-with-openrouter) |
@@ -25,7 +26,7 @@ Connections live in **Settings > AI connections** and take effect immediately.
 | Ollama | Ollama | Base URL | Local | Your Ollama server, for example `http://192.168.1.10:11434` |
 | OpenAI-compatible | OpenAI-compatible server | Base URL and optional key | Local | LM Studio, vLLM, LocalAI, llama.cpp server, LiteLLM proxy |
 
-Every request records which connection it used and how it is billed. A Claude plan can be used through Claude Code, as described below. Other consumer subscriptions, such as ChatGPT Plus, cannot be used yet.
+Every request records which connection it used and how it is billed. Claude and ChatGPT plans can be used as described below. Other consumer subscriptions cannot be used; [Subscription sign-in by platform](./provider-rules.md) explains why for each one.
 
 ## Adding a connection
 
@@ -64,6 +65,28 @@ How it works and what it can do:
 - Requests use your plan's normal usage limits. Studio and Usage show **Included in plan** instead of a cost, with the API-price equivalent on hover. When the plan's limit is reached, the request stops with a message saying so.
 - **Sign out** on the card signs Claude Code out. Removing the connection signs out and deletes its Claude Code folder.
 - Buildplate does not resell or pay for Claude usage. You use your own plan under your own agreement with Anthropic.
+
+## ChatGPT plan
+
+The **ChatGPT plan (Sign in with ChatGPT)** connection uses your ChatGPT Plus or Pro plan instead of an API key, through OpenAI's [Sign in with ChatGPT](https://help.openai.com/en/articles/20001542) for open-source apps. You sign in on OpenAI's own page; Buildplate never sees your ChatGPT password.
+
+**Before you start:** set a web UI password and sign in. ChatGPT plan connections always need one, even from the server itself.
+
+1. Under **Add a connection**, choose **OpenAI > ChatGPT plan (Sign in with ChatGPT)**, name it, and select **Continue with ChatGPT**.
+2. In the dialog, select the black **Continue with ChatGPT** button. A new tab opens on OpenAI. Sign in, check what Buildplate is asking for and approve.
+3. OpenAI then sends the tab to an address starting with `http://127.0.0.1:1455/auth/callback`. That page usually shows a "can't connect" error; this is expected, because the address points at your own computer, not at Buildplate. Copy the whole address from that tab's address bar.
+4. Paste it into the box in Buildplate and select **Finish sign-in**. The first time, Buildplate shows **You're using your ChatGPT plan**. Select **Got it**.
+
+The card then shows **Connected** and the models your plan can use appear in every model picker. Studio shows **Using ChatGPT plan** under the prompt when one of them is picked.
+
+How it works and what it can do:
+
+- The sign-in is stored encrypted on your server (`/data/chatgpt/`), readable only by Buildplate. It renews itself; if OpenAI ends it (you disconnected Buildplate in ChatGPT, changed your password, or the plan ended), the card asks you to sign in again.
+- Requests use your plan's normal usage limits. Studio and Usage show **Included in plan** instead of a cost, with the API-price equivalent on hover. **Manage usage** opens [ChatGPT's usage settings](https://chatgpt.com/settings/usage), where you can see what Buildplate has used, set a weekly limit for it, or disconnect it.
+- When the plan's limit (or a limit you set) is reached, the request stops with a message and a **Manage usage** button.
+- Requests are sent with storage turned off, so OpenAI does not keep them as ChatGPT conversations.
+- **Sign out** on the card forgets the sign-in. Removing the connection deletes it.
+- Buildplate does not resell or pay for ChatGPT usage. You use your own plan under your own agreement with OpenAI.
 
 ## Sign in with OpenRouter
 
