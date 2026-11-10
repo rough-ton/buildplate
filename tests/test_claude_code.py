@@ -213,14 +213,17 @@ def test_design_run_through_claude_code(server):
     assert {"status", "assistant", "tool", "code", "check", "preview", "usage"} <= set(kinds)
     done = events[-1]
     assert done["title"] == "Fake block" and done["tags"] == ["block", "test"] and done["summary"] == "A 20 mm block."
-    assert done["totals"]["input_tokens"] == 4100 and done["totals"]["cost_usd"] == 0 and done["totals"]["est_cost_usd"] == 0.0421
+    # input is all input tokens (cache reads and writes included), as for every other connection
+    assert done["totals"]["input_tokens"] == 11250 and done["totals"]["output_tokens"] == 385
+    assert done["totals"]["cost_usd"] == 0 and done["totals"]["est_cost_usd"] == 0.0321
 
     run = env.db.get_run(events[0]["run_id"])
     assert (run["status"], run["billing"], run["auth_method"], run["model"]) == ("ok", "subscription", "anthropic.claude_code", "claude-sonnet-5-5")
-    assert (run["input_tokens"], run["output_tokens"], run["cost_usd"], run["est_cost_usd"]) == (4100, 320, 0, 0.0421)
+    assert (run["input_tokens"], run["output_tokens"], run["cache_read_tokens"], run["cache_write_tokens"]) == (11250, 385, 6500, 3500)
+    assert (run["cost_usd"], run["est_cost_usd"], run["iterations"]) == (0, 0.0321, 3)
     assert [s["tool_calls"] for s in run["steps"]] == [["check_design"], ["submit_design"], []]
     summary = env.db.usage_summary(1)["totals"]
-    assert summary["plan_runs"] == 1 and summary["cost_usd"] == 0 and abs(summary["plan_est_cost_usd"] - 0.0421) < 1e-9
+    assert summary["plan_runs"] == 1 and summary["cost_usd"] == 0 and abs(summary["plan_est_cost_usd"] - 0.0321) < 1e-9
 
     log = json.loads((env.claude_code.config_dir(cid) / "last-run.json").read_text())
     args = log["args"]
@@ -320,3 +323,162 @@ def test_install_verifies_checksum(env, monkeypatch, tmp_path):
     path = asyncio.run(cc.install())
     assert path == cc.binary() and path.read_bytes() == payload and os.access(path, os.X_OK)
     assert cc.info()["installed"] is True
+
+
+def test_plan_usage_metrics_are_accurate(server):
+    """Every figure for a Claude plan request, checked against the stream by hand."""
+    import litellm
+
+    from app import providers
+
+    env = server
+    cid = env.connections.create("anthropic.claude_code", "Plan", {})["id"]
+    events = []
+
+    async def go():
+        async for ev in env.agent.run("a 20 mm test block", connection=cid, model="sonnet"):
+            events.append(ev)
+
+    asyncio.run(go())
+    assert events[-1]["type"] == "done", events[-1]
+    run = env.db.get_run(events[0]["run_id"])
+    steps = run["steps"]
+
+    # per step: input = new + cache read + cache write; output is the final count from
+    # message_delta, never the placeholder (1) on message_start and assistant messages
+    got = [(s["input_tokens"], s["output_tokens"], s["cache_read_tokens"], s["cache_write_tokens"]) for s in steps]
+    assert got == [(4000, 250, 0, 3000), (3700, 120, 3000, 500), (3550, 15, 3500, 0)]
+    assert all(s["cost_usd"] == 0 for s in steps)
+    # the subagent message (99,999 input) is not a step
+    assert sum(s["input_tokens"] for s in steps) == run["input_tokens"] == 11250
+    assert sum(s["output_tokens"] for s in steps) == run["output_tokens"] == 385
+
+    # per-step API-price estimates, with the 1-hour cache write priced at the 1-hour rate
+    p = litellm.model_cost["claude-sonnet-5-5"]
+    step1 = 1000 * p["input_cost_per_token"] + 3000 * p["cache_creation_input_token_cost_above_1hr"] + 250 * p["output_cost_per_token"]
+    assert abs(steps[0]["est_cost_usd"] - round(step1, 6)) < 1e-9
+    step2 = 200 * p["input_cost_per_token"] + 3000 * p["cache_read_input_token_cost"] + 500 * p["cache_creation_input_token_cost"] + 120 * p["output_cost_per_token"]
+    assert abs(steps[1]["est_cost_usd"] - round(step2, 6)) < 1e-9
+    assert steps[2]["est_cost_usd"] == providers.estimate_cost("anthropic", "claude-sonnet-5-5", {
+        "input_tokens": 3550, "cache_read_tokens": 3500, "output_tokens": 15})
+    # the run's estimate is Claude Code's own, from modelUsage
+    assert run["est_cost_usd"] == 0.0321
+
+    # live Studio counters used the real output counts
+    usage_events = [e for e in events if e["type"] == "usage"]
+    assert [e["usage"]["output_tokens"] for e in usage_events] == [250, 120, 15]
+    assert usage_events[-1]["totals"]["output_tokens"] == 385
+
+    # the plan-limit warning seen during the run is kept on the connection
+    lim = env.connections.get(cid)["status"]["plan_limit"]
+    assert lim["status"] == "allowed_warning" and lim["utilization"] == 0.82
+
+    # Usage: by-model and CSV carry the plan estimate and billing
+    by_model = env.db.usage_summary(1)["by_model"]
+    row = next(m for m in by_model if m["model"] == "claude-sonnet-5-5")
+    assert (row["billing"], row["cost_usd"], row["est_cost_usd"], row["input_tokens"]) == ("subscription", 0, 0.0321, 11250)
+    from fastapi.testclient import TestClient
+
+    csv_text = TestClient(env.main.app).get("/api/usage/export.csv").text
+    header, first = csv_text.splitlines()[0].split(","), csv_text.splitlines()[1].split(",")
+    rec = dict(zip(header, first))
+    assert {"billing", "connection_id", "auth_method", "est_cost_usd", "cache_write_tokens"} <= set(header)
+    assert (rec["billing"], rec["est_cost_usd"], rec["input_tokens"]) == ("subscription", "0.0321", "11250")
+
+
+def test_pricing_override_applies_to_plan_estimates(server):
+    env = server
+    env.store.update({"pricing": {"overrides": {"anthropic/claude-sonnet-5-5": {"input": 1.0, "output": 10.0}}}})
+    cid = env.connections.create("anthropic.claude_code", "Plan", {})["id"]
+    events = []
+
+    async def go():
+        async for ev in env.agent.run("block", connection=cid, model="sonnet"):
+            events.append(ev)
+
+    asyncio.run(go())
+    run = env.db.get_run(events[0]["run_id"])
+    assert run["est_cost_usd"] == round(11250 / 1e6 * 1.0 + 385 / 1e6 * 10.0, 6)
+    assert run["steps"][0]["est_cost_usd"] == round(4000 / 1e6 + 250 / 1e6 * 10, 6)
+
+
+def test_stopped_or_crashed_run_keeps_its_usage(server):
+    env = server
+    cid = env.connections.create("anthropic.claude_code", "Plan", {})["id"]
+    events = []
+
+    async def go():
+        async for ev in env.agent.run("CRASH block", connection=cid, model="sonnet"):
+            events.append(ev)
+
+    asyncio.run(go())
+    assert events[-1]["type"] == "error"
+    run = env.db.get_run(events[0]["run_id"])
+    # no result message: totals come from the step Claude Code completed
+    assert (run["status"], run["input_tokens"], run["output_tokens"], run["iterations"]) == ("error", 4000, 250, 1)
+    assert run["est_cost_usd"] == run["steps"][0]["est_cost_usd"] and run["est_cost_usd"] > 0
+
+
+def test_plan_limit_rejection(server):
+    env = server
+    cid = env.connections.create("anthropic.claude_code", "Plan", {})["id"]
+    events = []
+
+    async def go():
+        async for ev in env.agent.run("RATE_LIMIT block", connection=cid, model="sonnet"):
+            events.append(ev)
+
+    asyncio.run(go())
+    msg = events[-1]["message"]
+    assert events[-1]["type"] == "error" and "usage limit has been reached" in msg and "resets at" in msg
+    assert env.connections.get(cid)["status"]["plan_limit"]["status"] == "rejected"
+    assert env.connections.get(cid)["status"]["state"] != "needs_sign_in"  # a limit is not a sign-in problem
+    run = env.db.get_run(events[0]["run_id"])
+    assert (run["input_tokens"], run["output_tokens"]) == (4000, 250)
+
+
+def test_plan_usage_report(env):
+    from fastapi.testclient import TestClient
+
+    client = TestClient(env.main.app)
+    cid = env.connections.create("anthropic.claude_code", "Plan", {})["id"]
+    r = client.get(f"/api/connections/{cid}/plan-usage")
+    assert r.status_code == 400 and "not signed in" in r.json()["detail"]
+    env.claude_code.child_env(cid)
+    (env.claude_code.config_dir(cid) / "fake-signed-in").write_text("1")
+    data = client.get(f"/api/connections/{cid}/plan-usage?refresh=1").json()
+    rows = data["report"]["rate_limits"]["limits"]
+    assert [(r["kind"], r["percent"]) for r in rows] == [("session", 23.5), ("weekly_all", 41), ("weekly_scoped", 88)]
+    assert data["report"]["rate_limits"]["extra_usage"]["used_credits"] == 1250 and "23%" in data["text"]
+    # cached for a minute, so the Usage page does not start Claude Code on every load
+    (env.claude_code.config_dir(cid) / "fake-signed-in").unlink()
+    assert client.get(f"/api/connections/{cid}/plan-usage").json()["report"] is not None
+    ollama = env.connections.create("ollama.local", "", {"base_url": "http://x:1"})["id"]
+    assert client.get(f"/api/connections/{ollama}/plan-usage").status_code == 400
+
+
+def test_v040_plan_runs_are_corrected_once(tmp_path, monkeypatch):
+    """v0.4.0 stored plan runs' input without cached tokens; the first start of this
+    version adds them back, once."""
+    import sqlite3
+
+    monkeypatch.setenv("BUILDPLATE_DATA", str(tmp_path))
+    from app import config
+
+    importlib.reload(config)
+    from app import db
+
+    importlib.reload(db)
+    db.init()
+    with db.tx() as c:
+        c.execute("DELETE FROM meta")  # as if the database came from v0.4.0
+        c.execute("INSERT INTO runs (id, prompt, provider, model, status, started_at, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, billing, est_cost_usd) "
+                  "VALUES ('plan', 'p', 'anthropic', 'claude-sonnet-5-5', 'ok', 1, 1250, 385, 6500, 3500, 'subscription', 0.0321)")
+        c.execute("INSERT INTO runs (id, prompt, provider, model, status, started_at, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, billing) "
+                  "VALUES ('api', 'p', 'anthropic', 'claude-sonnet-5-5', 'ok', 1, 9000, 100, 6000, 0, 'api')")
+        c.execute("INSERT INTO run_steps (run_id, step, input_tokens, cache_read_tokens, cache_write_tokens) VALUES ('plan', 1, 1000, 0, 3000)")
+    db.init()
+    db.init()  # idempotent
+    assert db.get_run("plan")["input_tokens"] == 11250 and db.get_run("plan")["steps"][0]["input_tokens"] == 4000
+    assert db.get_run("api")["input_tokens"] == 9000  # pay-per-use runs were already right
+

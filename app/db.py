@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS run_steps (
     cache_write_tokens INTEGER NOT NULL DEFAULT 0,
     cost_usd REAL NOT NULL DEFAULT 0,
     duration_ms INTEGER NOT NULL DEFAULT 0,
-    tool_calls TEXT NOT NULL DEFAULT '[]'
+    tool_calls TEXT NOT NULL DEFAULT '[]',
+    est_cost_usd REAL
 );
 CREATE TABLE IF NOT EXISTS design_tags (
     design_id TEXT NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
@@ -90,6 +91,10 @@ CREATE INDEX IF NOT EXISTS idx_design_tags_tag ON design_tags(tag);
 CREATE VIRTUAL TABLE IF NOT EXISTS design_fts USING fts5(
     design_id UNINDEXED, title, tags, summary, prompt, provider, model, printer, source,
     tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
+);
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_versions_design ON versions(design_id, version);
@@ -111,6 +116,7 @@ _conn: sqlite3.Connection | None = None
 # Columns added after the first release: table -> {column: type}.
 _ADDED_COLUMNS = {
     "runs": {"connection_id": "TEXT", "auth_method": "TEXT", "billing": "TEXT", "est_cost_usd": "REAL"},
+    "run_steps": {"est_cost_usd": "REAL"},
 }
 
 # Bump when the search index layout or contents change; existing databases are
@@ -164,6 +170,7 @@ def init() -> None:
     _conn.commit()
     with tx() as c:
         _migrate(c)
+        _fix_plan_input_tokens(c)
         if c.execute("PRAGMA user_version").fetchone()[0] < INDEX_VERSION:
             c.execute("DELETE FROM design_fts")
             ids = [r[0] for r in c.execute("SELECT id FROM designs")]
@@ -172,6 +179,24 @@ def init() -> None:
             ids = [r[0] for r in c.execute("SELECT id FROM designs WHERE id NOT IN (SELECT design_id FROM design_fts)")]
         for did in ids:
             _reindex(c, did)
+
+
+def _fix_plan_input_tokens(c: sqlite3.Connection) -> None:
+    """v0.4.0 stored Claude plan runs' input_tokens without their cached tokens, unlike
+    every other connection (input includes cache reads and writes). The cache counts
+    were stored separately, so add them back once. Runs from later versions already
+    include them."""
+    if c.execute("SELECT 1 FROM meta WHERE key='plan_input_includes_cache'").fetchone():
+        return
+    # This runs once, on the first start of a version with the fix, so every plan run
+    # already stored is from v0.4.0.
+    old = "billing='subscription'"
+    c.execute(
+        "UPDATE run_steps SET input_tokens = input_tokens + cache_read_tokens + cache_write_tokens "
+        f"WHERE run_id IN (SELECT id FROM runs WHERE {old})"
+    )
+    c.execute(f"UPDATE runs SET input_tokens = input_tokens + cache_read_tokens + cache_write_tokens WHERE {old}")
+    c.execute("INSERT INTO meta (key, value) VALUES ('plan_input_includes_cache', '1')")
 
 
 @contextmanager
@@ -540,8 +565,8 @@ def start_run(
 def add_step(run_id: str, step: int, usage: dict[str, Any], duration_ms: int, tool_calls: list[str]) -> None:
     with tx() as c:
         c.execute(
-            "INSERT INTO run_steps (run_id, step, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, duration_ms, tool_calls) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO run_steps (run_id, step, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, duration_ms, tool_calls, est_cost_usd) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 run_id,
                 step,
@@ -552,6 +577,7 @@ def add_step(run_id: str, step: int, usage: dict[str, Any], duration_ms: int, to
                 usage["cost_usd"],
                 duration_ms,
                 json.dumps(tool_calls),
+                usage.get("est_cost_usd"),
             ),
         )
         c.execute(
@@ -577,10 +603,10 @@ def set_run_model(run_id: str, model: str) -> None:
         c.execute("UPDATE runs SET model=? WHERE id=?", (model[:120], run_id))
 
 
-def set_run_totals(run_id: str, totals: dict[str, Any], est_cost_usd: float, iterations: int) -> None:
+def set_run_totals(run_id: str, totals: dict[str, Any], est_cost_usd: float | None, iterations: int) -> None:
     """Overwrite a run's token totals with the runtime's final figures. For plan
     (subscription) runs cost_usd stays 0 and est_cost_usd keeps the API-equivalent
-    estimate."""
+    estimate (None when the model's price is unknown)."""
     with tx() as c:
         c.execute(
             "UPDATE runs SET input_tokens=?, output_tokens=?, cache_read_tokens=?, cache_write_tokens=?, "
@@ -588,7 +614,7 @@ def set_run_totals(run_id: str, totals: dict[str, Any], est_cost_usd: float, ite
             (
                 int(totals.get("input_tokens", 0)), int(totals.get("output_tokens", 0)),
                 int(totals.get("cache_read_tokens", 0)), int(totals.get("cache_write_tokens", 0)),
-                round(float(est_cost_usd), 6), int(iterations), run_id,
+                None if est_cost_usd is None else round(float(est_cost_usd), 6), int(iterations), run_id,
             ),
         )
 
@@ -635,7 +661,9 @@ def usage_summary(days: int = 30) -> dict[str, Any]:
                 "COALESCE(SUM(output_tokens),0) AS output_tokens, COALESCE(SUM(cache_read_tokens),0) AS cache_read_tokens, "
                 "COALESCE(SUM(cost_usd),0) AS cost_usd, COALESCE(AVG(input_tokens+output_tokens),0) AS avg_tokens, "
                 "COALESCE(SUM(billing='subscription'),0) AS plan_runs, "
-                "COALESCE(SUM(CASE WHEN billing='subscription' THEN est_cost_usd ELSE 0 END),0) AS plan_est_cost_usd "
+                "COALESCE(SUM(CASE WHEN billing='subscription' THEN est_cost_usd ELSE 0 END),0) AS plan_est_cost_usd, "
+                "COALESCE(SUM(billing='subscription' AND est_cost_usd IS NULL),0) AS plan_unpriced_runs, "
+                "COALESCE(SUM(cache_write_tokens),0) AS cache_write_tokens "
                 "FROM runs WHERE started_at>=?",
                 (since,),
             ).fetchone()

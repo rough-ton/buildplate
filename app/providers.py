@@ -15,6 +15,8 @@ def supports_vision(method: AuthMethod, model: str) -> bool:
         return True
     if mode == "off":
         return False
+    if method.runtime != "litellm":
+        return method.vision_default  # e.g. Claude Code: model names are aliases LiteLLM does not know
     import litellm
 
     try:
@@ -61,3 +63,42 @@ def usage_from_response(resp: Any, method: AuthMethod, model: str) -> dict[str, 
         "cost_usd": round(cost, 6),
         "cost_known": known,
     }
+
+
+def _price(family: str, model: str) -> dict[str, Any] | None:
+    import litellm
+
+    for key in (model, f"{family}/{model}"):
+        info = litellm.model_cost.get(key)
+        if info and info.get("input_cost_per_token") is not None:
+            return info
+    return None
+
+
+def estimate_cost(family: str, model: str, usage: dict[str, Any]) -> float | None:
+    """What a request would cost at API list prices, from Buildplate's token fields:
+    input_tokens (all input, cached included), cache_read_tokens, cache_write_tokens
+    (of which cache_write_1h_tokens were 1-hour writes) and output_tokens. A pricing
+    override for <family>/<model> wins, as it does for pay-per-use requests. Returns
+    None when the model's price is unknown."""
+    inp = int(usage.get("input_tokens") or 0)
+    out = int(usage.get("output_tokens") or 0)
+    ov = store.get()["pricing"]["overrides"].get(f"{family}/{model}")
+    if ov:
+        return round(inp / 1e6 * float(ov.get("input", 0)) + out / 1e6 * float(ov.get("output", 0)), 6)
+    info = _price(family, model)
+    if info is None:
+        return None
+    read = int(usage.get("cache_read_tokens") or 0)
+    write = int(usage.get("cache_write_tokens") or 0)
+    write_1h = min(int(usage.get("cache_write_1h_tokens") or 0), write)
+    base_in = float(info["input_cost_per_token"])
+    cost = (
+        max(inp - read - write, 0) * base_in
+        + read * float(info.get("cache_read_input_token_cost") or base_in)
+        + (write - write_1h) * float(info.get("cache_creation_input_token_cost") or base_in)
+        + write_1h * float(info.get("cache_creation_input_token_cost_above_1hr") or info.get("cache_creation_input_token_cost") or base_in)
+        + out * float(info.get("output_cost_per_token") or 0)
+    )
+    return round(cost, 6)
+

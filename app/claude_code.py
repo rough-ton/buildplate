@@ -276,3 +276,47 @@ async def forget(connection_id: str) -> None:
     except ClaudeCodeError:
         pass
     shutil.rmtree(config_dir(connection_id), ignore_errors=True)
+
+
+_PLAN_USAGE: dict[str, tuple[float, dict[str, Any]]] = {}
+PLAN_USAGE_TTL = 60
+
+
+async def plan_usage(connection_id: str, refresh: bool = False) -> dict[str, Any]:
+    """The plan's usage meters from Claude Code's own `/usage` report, which costs no
+    model tokens. Returns {report, text, fetched_at}: report is Claude Code's
+    structured usage_report (rate_limits.limits rows with kind, group, percent,
+    resets_at; extra_usage credits) or None when it only gave text. Cached briefly."""
+    import time
+
+    cached = _PLAN_USAGE.get(connection_id)
+    if cached and not refresh and time.time() - cached[0] < PLAN_USAGE_TTL:
+        return cached[1]
+    code, out, err = await _run(
+        connection_id, "-p", "/usage", "--output-format", "stream-json", "--verbose",
+        "--tools", "", "--restricted", "--strict-mcp-config", "--no-session-persistence", "--permission-mode", "dontAsk",
+        timeout=60,
+    )
+    report, texts, result_text = None, [], ""
+    for line in out.splitlines():
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if ev.get("type") == "assistant":
+            report = ev.get("usage_report") or report
+            for b in (ev.get("message") or {}).get("content") or []:
+                if b.get("type") == "text" and b.get("text"):
+                    texts.append(b["text"])
+        elif ev.get("type") == "result":
+            result_text = str(ev.get("result") or "")
+            if ev.get("is_error"):
+                from .claude_runtime import friendly_error
+
+                raise ClaudeCodeError(friendly_error(result_text)[0])
+    if code != 0 and report is None and not texts:
+        raise ClaudeCodeError((err.strip() or result_text or "Claude Code could not report plan usage.")[:300])
+    data = {"report": report, "text": "\n".join(texts) or result_text, "fetched_at": time.time()}
+    _PLAN_USAGE[connection_id] = (time.time(), data)
+    return data
+

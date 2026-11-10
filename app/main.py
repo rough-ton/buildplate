@@ -306,6 +306,22 @@ async def sign_out_connection(cid: str, request: Request):
     return {"connection": public_connection(connections.get(cid))}
 
 
+@app.get("/api/connections/{cid}/plan-usage")
+async def plan_usage(cid: str, refresh: bool = False):
+    """The Claude plan's usage meters, from Claude Code's own /usage report."""
+    try:
+        conn = connections.get(cid)
+    except KeyError:
+        raise HTTPException(404, "No connection with that id")
+    if conn["method"] != "anthropic.claude_code":
+        raise HTTPException(400, "Only Claude plan connections have plan usage.")
+    try:
+        report = await claude_code.plan_usage(cid, refresh=refresh)
+    except claude_code.ClaudeCodeError as exc:
+        raise HTTPException(400, str(exc))
+    return {**report, "plan_limit": (conn.get("status") or {}).get("plan_limit")}
+
+
 @app.websocket("/api/connections/{cid}/terminal")
 async def connection_terminal(ws: WebSocket, cid: str, action: str = "login"):
     """Claude Code's own sign-in (or sign-out) in a browser terminal. Needs a password
@@ -629,8 +645,9 @@ async def usage_summary(days: int = 30):
 async def usage_csv():
     rows = db.all_runs_for_export()
     buf = io.StringIO()
-    cols = ["id", "started_at", "source", "provider", "model", "status", "iterations", "input_tokens", "output_tokens",
-            "cache_read_tokens", "cache_write_tokens", "cost_usd", "design_id", "prompt"]
+    cols = ["id", "started_at", "source", "connection_id", "auth_method", "billing", "provider", "model", "status",
+            "iterations", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cost_usd",
+            "cost_known", "est_cost_usd", "design_id", "prompt"]
     w = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
     w.writeheader()
     w.writerows(rows)
