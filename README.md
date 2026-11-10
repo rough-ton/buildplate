@@ -47,6 +47,9 @@ model, or your Claude or ChatGPT plan.
 - **Every major printer.** A catalog of 400+ printers from about 70 manufacturers, with
   the nozzle sizes you use. The plate, checks and design limits follow the printer you
   pick, including round beds for deltas.
+- **Hardware-aware designs.** Keep an inventory of the screws, inserts, magnets and bearings you
+  have. The agent designs around them, or picks standard parts and gives you a parts list with
+  buy links, or avoids hardware entirely. Hole and pocket sizes come from a built-in catalog.
 - **Live parameters.** Customizer variables become sliders. Drag one and the part
   re-renders in seconds without spending a token.
 - **Library and search.** Every generation and edit is a version you can reopen and
@@ -118,6 +121,7 @@ The same guides are built into the app under **Docs**.
 | [AI connections](docs/providers.md) | Connecting each provider, your Claude or ChatGPT plan, choosing models, local models |
 | [Subscription sign-in](docs/provider-rules.md) | Which AI subscriptions can be used and why some cannot |
 | [Using Studio](docs/using-studio.md) | Prompting, parameters, code editing, versions, tags, Library search, exports |
+| [Parts inventory](docs/parts.md) | Your hardware on hand, designs that use it, parts lists and buy links |
 | [Token usage and cost](docs/token-usage.md) | What is counted, how cost is estimated, Claude plan usage |
 | [MCP integration](docs/mcp.md) | Claude Desktop, Claude Code and other MCP clients |
 | [Unraid](docs/unraid.md) | Template install, paths, permissions, reverse proxy |
