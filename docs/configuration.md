@@ -74,6 +74,12 @@ At least one profile must exist. Settings from earlier versions with a single pr
 | MCP token | Bearer token required on `/mcp` (and accepted on `/api`) when set |
 | Public URL | Base address used in links returned by MCP tools |
 
+### About
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| Check for updates | On | Shows **up-to-date**, or **update available (vX.Y.Z)** with a link to the release, next to the Buildplate version. See [Update check](security.md#update-check) |
+
 ### Pricing overrides
 
 Per-model prices in US dollars per million input and output tokens, keyed `provider/model`, where provider is the provider family (`anthropic`, `openai`, `ollama` and so on), whichever connection is used. Used instead of the built-in price list.
@@ -87,6 +93,7 @@ Per-model prices in US dollars per million input and output tokens, keyed `provi
 | `BUILDPLATE_PORT` | `8080` | Port inside the container |
 | `BUILDPLATE_HOST` | `0.0.0.0` | Listen address |
 | `BUILDPLATE_DATA` | `/data` | Data folder |
+| `BUILDPLATE_VERSION` | `dev` | Version shown in Settings. Release images set it from their tag; builds without one report `dev` and skip the update check |
 | `BUILDPLATE_SECRET_KEY` | generated | Key used to encrypt secrets. If unset, one is generated and stored in `/data/.secret` |
 | `BUILDPLATE_ADMIN_PASSWORD` | none | Sets the web UI password on first start, if none is set |
 | `BUILDPLATE_MCP_TOKEN` | none | Sets the MCP token on first start, if none is set |
