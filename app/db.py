@@ -92,6 +92,25 @@ CREATE VIRTUAL TABLE IF NOT EXISTS design_fts USING fts5(
     design_id UNINDEXED, title, tags, summary, prompt, provider, model, printer, source,
     tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
 );
+CREATE TABLE IF NOT EXISTS parts (
+    id TEXT PRIMARY KEY,
+    catalog_key TEXT,
+    category TEXT NOT NULL DEFAULT 'other',
+    name TEXT NOT NULL,
+    size TEXT NOT NULL DEFAULT '',
+    type TEXT NOT NULL DEFAULT '',
+    material TEXT NOT NULL DEFAULT '',
+    dims TEXT NOT NULL DEFAULT '{}',
+    holes TEXT NOT NULL DEFAULT '{}',
+    quantity INTEGER NOT NULL DEFAULT 0,
+    low_stock INTEGER,
+    bambu_url TEXT NOT NULL DEFAULT '',
+    amazon_url TEXT NOT NULL DEFAULT '',
+    other_url TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -117,6 +136,9 @@ _conn: sqlite3.Connection | None = None
 _ADDED_COLUMNS = {
     "runs": {"connection_id": "TEXT", "auth_method": "TEXT", "billing": "TEXT", "est_cost_usd": "REAL"},
     "run_steps": {"est_cost_usd": "REAL"},
+    # parts used by the version (JSON list), the hardware mode it was made with, the
+    # agent's note when hardware was unavoidable, and what "mark as built" took
+    "versions": {"bom": "TEXT", "hardware_mode": "TEXT", "hardware_note": "TEXT", "built": "TEXT"},
 }
 
 # Bump when the search index layout or contents change; existing databases are
@@ -307,6 +329,27 @@ def add_version(
     return v
 
 
+def set_version_hardware(design_id: str, version: int, bom: list[dict[str, Any]], mode: str | None, note: str = "") -> None:
+    """Record the parts a version uses and how hardware was chosen for it."""
+    with tx() as c:
+        c.execute(
+            "UPDATE versions SET bom=?, hardware_mode=?, hardware_note=? WHERE design_id=? AND version=?",
+            (json.dumps(bom) if bom else None, mode, note or None, design_id, version),
+        )
+
+
+def latest_hardware_mode(design_id: str | None) -> str | None:
+    """The hardware mode the design's latest version was made with, if any."""
+    if not design_id:
+        return None
+    with tx() as c:
+        r = c.execute(
+            "SELECT v.hardware_mode FROM versions v JOIN designs d ON d.id=v.design_id "
+            "WHERE v.design_id=? AND v.version=d.current_version", (design_id,)
+        ).fetchone()
+    return r[0] if r and r[0] and r[0] != "ask" else None
+
+
 def rename_design(design_id: str, title: str) -> None:
     with tx() as c:
         c.execute("UPDATE designs SET title=?, updated_at=? WHERE id=?", (title[:120] or "Untitled", time.time(), design_id))
@@ -358,7 +401,7 @@ def list_designs(
     where: list[str] = []
     args: list[Any] = []
     sql = (
-        "SELECT d.*, v.summary, v.stats, v.origin, v.provider, v.model, v.client, "
+        "SELECT d.*, v.summary, v.stats, v.origin, v.provider, v.model, v.client, v.bom, "
         "r.id AS run_id, r.input_tokens, r.output_tokens, r.cost_usd, r.cost_known, "
         "(SELECT json_group_array(tag) FROM (SELECT tag FROM design_tags WHERE design_id=d.id ORDER BY tag)) AS tags, "
         "(SELECT json_group_array(json_object('provider', provider, 'model', model)) FROM "
@@ -494,6 +537,7 @@ def get_design(design_id: str) -> dict[str, Any] | None:
         design["versions"] = _rows(
             c.execute(
                 "SELECT v.version, v.summary, v.stats, v.created_at, v.origin, v.provider, v.model, v.client, "
+                "v.bom, v.hardware_mode, v.hardware_note, v.built, "
                 "r.id AS run_id, r.input_tokens, r.output_tokens, r.cost_usd, r.cost_known "
                 "FROM versions v LEFT JOIN runs r ON r.id=v.run_id WHERE v.design_id=? ORDER BY v.version",
                 (design_id,),

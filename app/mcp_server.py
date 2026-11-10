@@ -3,11 +3,12 @@ clients can use Buildplate's renderer, validator, library and design agent."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from mcp.server.mcpserver import Image, MCPServer
 
-from . import agent, config, db, openscad, printers, search
+from . import agent, config, db, openscad, parts, printers, search
 from .settings import store
 
 mcp = MCPServer(
@@ -94,16 +95,25 @@ async def save_design(
     description=(
         "Run Buildplate's built-in design agent on a natural-language request. Uses the design agent's default "
         "AI connection and model unless connection (an id from environment) and model are given. Token usage "
-        "is tracked in Buildplate. Pass design_id to modify an existing design."
+        "is tracked in Buildplate. Pass design_id to modify an existing design. hardware_mode says how to "
+        "handle screws, inserts, magnets and other hardware: inventory (only parts the user has), order (pick "
+        "standard parts and return a shopping list), none (printed alternatives) or ask (default: if the request "
+        "needs hardware, the result is a question; call again with the user's choice). The result includes the "
+        "bill of materials with buy links."
     )
 )
 async def generate_design(
-    prompt: str, design_id: str | None = None, connection: str | None = None, model: str | None = None
+    prompt: str, design_id: str | None = None, connection: str | None = None, model: str | None = None,
+    hardware_mode: str = "ask",
 ) -> dict[str, Any]:
     done: dict[str, Any] | None = None
-    async for ev in agent.run(prompt, design_id=design_id, source="mcp", connection=connection, model=model):
+    async for ev in agent.run(prompt, design_id=design_id, source="mcp", connection=connection, model=model,
+                              hardware_mode=hardware_mode):
         if ev["type"] == "done":
             done = ev
+        elif ev["type"] == "question":
+            return {"question": ev["message"], "options": ev["options"],
+                    "next": "Ask the user, then call generate_design again with hardware_mode set to their choice."}
         elif ev["type"] == "error":
             return {"error": ev["message"]}
     assert done is not None
@@ -113,6 +123,8 @@ async def generate_design(
         "title": done["title"],
         "summary": done["summary"],
         "tags": done["tags"],
+        "bill_of_materials": done["bom"],
+        "hardware_note": done["hardware_note"],
         "stats": done["stats"],
         "tokens": done["totals"],
         "code": done["code"],
@@ -189,9 +201,56 @@ async def get_design(design_id: str, version: int | None = None) -> dict[str, An
         "code": v["scad"],
         "tags": db.get_tags(design_id),
         "generated_by": _generated_by(v),
+        "bill_of_materials": parts.resolve_bom(json.loads(v.get("bom") or "[]")),
         "stats": v["stats"],
         "downloads": _links(design_id, v["version"]),
     }
+
+
+@mcp.tool(description=(
+    "List the user's parts inventory (screws, inserts, nuts, magnets, bearings...) with quantities, hole sizes and "
+    "buy links, optionally filtered by words or category. Set include_catalog to also search the hardware catalog."
+))
+async def list_parts(query: str = "", category: str = "", include_catalog: bool = False) -> dict[str, Any]:
+    inv = parts.list_inventory(query, category)
+    out: dict[str, Any] = {"inventory": [
+        {k: p[k] for k in ("id", "catalog_key", "category", "name", "size", "type", "quantity", "low", "holes", "links")} for p in inv
+    ]}
+    if include_catalog:
+        words = query.lower().split()
+        out["catalog"] = [
+            {k: p[k] for k in ("key", "category", "name", "size", "type", "holes")}
+            for p in parts.catalog()["parts"]
+            if (not category or p["category"] == category) and all(w in f"{p['name']} {p['size']} {p['type']}".lower() for w in words)
+        ][:50]
+    return out
+
+
+@mcp.tool(description=(
+    "Add a part to the user's inventory: catalog_key (from list_parts with include_catalog) and a quantity, or a "
+    "custom part with name, category and size. Adding a catalog part that is already stocked adds to its quantity."
+))
+async def add_part(quantity: int = 0, catalog_key: str = "", name: str = "", category: str = "", size: str = "",
+                   notes: str = "") -> dict[str, Any]:
+    data = {"catalog_key": catalog_key, "quantity": quantity}
+    if not catalog_key:
+        data |= {"name": name, "category": category or "other", "size": size, "notes": notes}
+    try:
+        p = parts.create(data)
+    except parts.PartsError as exc:
+        return {"error": str(exc)}
+    return {k: p[k] for k in ("id", "name", "quantity")}
+
+
+@mcp.tool(description="Change a part's quantity on hand: pass quantity to set it, or delta to add or remove.")
+async def update_part_quantity(part_id: str, quantity: int | None = None, delta: int | None = None) -> dict[str, Any]:
+    try:
+        p = parts.update(part_id, {"quantity": quantity}) if quantity is not None else parts.adjust(part_id, int(delta or 0))
+    except KeyError:
+        return {"error": "No part with that id"}
+    except parts.PartsError as exc:
+        return {"error": str(exc)}
+    return {k: p[k] for k in ("id", "name", "quantity")}
 
 
 @mcp.tool(description="Extract Customizer parameters (name, value, range, options) from OpenSCAD code.")

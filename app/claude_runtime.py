@@ -28,9 +28,10 @@ from typing import Any, AsyncIterator
 from mcp.server.mcpserver import Context, Image, MCPServer
 
 from . import claude_code, config, db, providers
+from . import parts as parts_lib
 
 SERVER_NAME = "buildplate"
-TOOL_NAMES = ("check_design", "submit_design")
+TOOL_NAMES = ("check_design", "submit_design", "list_parts")
 _DONE = object()
 
 
@@ -38,6 +39,7 @@ _DONE = object()
 class RunState:
     run_id: str
     vision: bool
+    hardware_mode: str = "ask"
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     final: dict[str, Any] | None = None
     last_good: dict[str, Any] | None = None
@@ -98,10 +100,29 @@ async def check_design(code: str, ctx: Context) -> list[Any]:
 
 
 @run_mcp.tool(
-    description="Save the final, checked design. Ends the task. The code is checked again and only saved if it renders.",
+    description=(
+        "Search the user's parts inventory and the hardware catalog (screws, heat-set inserts, nuts, washers, magnets, "
+        "bearings, standoffs...). Returns each part's id or key, quantity on hand, and the hole, pocket and nut-trap "
+        "sizes to model it with."
+    ),
     structured_output=False,
 )
-async def submit_design(code: str, title: str, summary: str, ctx: Context, tags: list[str] | None = None) -> list[Any]:
+async def list_parts(ctx: Context, query: str = "", category: str = "") -> list[Any]:
+    run = _state(ctx)
+    await run.queue.put({"type": "tool", "name": "list_parts"})
+    return [parts_lib.search_for_agent(query, category)]
+
+
+@run_mcp.tool(
+    description=(
+        "Save the final, checked design. Ends the task. The code is checked again and only saved if it renders. "
+        "parts lists every hardware part the design uses as {part: id, key or name, quantity, use}; hardware_note "
+        "explains unavoidable hardware when none was asked for."
+    ),
+    structured_output=False,
+)
+async def submit_design(code: str, title: str, summary: str, ctx: Context, tags: list[str] | None = None,
+                        parts: list[dict[str, Any]] | None = None, hardware_note: str = "") -> list[Any]:
     from . import agent
 
     run = _state(ctx)
@@ -113,7 +134,11 @@ async def submit_design(code: str, title: str, summary: str, ctx: Context, tags:
     if not check["ok"]:
         return ["Not saved, fix these problems first.\n" + text]
     run.last_good = {"code": code, "stats": check["stats"]}
-    run.final = {"code": code, "title": title, "summary": summary, "tags": list(tags or [])}
+    problem = parts_lib.check_submission(run.hardware_mode, parts or [], hardware_note)
+    if problem:
+        return [problem]
+    run.final = {"code": code, "title": title, "summary": summary, "tags": list(tags or []),
+                 "parts": list(parts or []), "hardware_note": hardware_note}
     return ["Saved. The task is complete; reply with one short sentence and stop."]
 
 
@@ -212,7 +237,7 @@ def build_args(binary: str, model: str, system: str, mcp_config_path: str, max_t
 
 SYSTEM_SUFFIX = """
 
-You are running inside Buildplate. Your only tools are check_design and submit_design.
+You are running inside Buildplate. Your only tools are check_design, list_parts and submit_design.
 Pass the complete OpenSCAD source every time. Do not ask the user questions; make
 sensible assumptions and state them briefly in the summary."""
 
@@ -226,6 +251,7 @@ async def design_loop(
     vision: bool,
     max_iterations: int,
     state: dict[str, Any],
+    hardware_mode: str = "ask",
 ) -> AsyncIterator[dict[str, Any]]:
     """Run Claude Code for one design request, yielding Studio events. On return,
     state["final"], state["last_good"] and state["totals"] hold the outcome; an error
@@ -235,7 +261,7 @@ async def design_loop(
         raise claude_code.ClaudeCodeError("Claude Code is not installed. Open Settings > AI connections and install it.")
 
     token = "bprun_" + secrets.token_urlsafe(32)
-    run = RunState(run_id=run_id, vision=vision)
+    run = RunState(run_id=run_id, vision=vision, hardware_mode=hardware_mode)
     _RUNS[token] = run
     workdir = tempfile.mkdtemp(prefix="bp-run-", dir=str(config.CACHE_DIR))
     os.chmod(workdir, 0o700)
