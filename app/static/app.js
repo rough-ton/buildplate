@@ -174,7 +174,7 @@ $("#logout").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------- router
-const routes = { studio: Studio, library: Library, usage: Usage, settings: Settings, docs: Docs };
+const routes = { studio: Studio, library: Library, parts: Parts, usage: Usage, settings: Settings, docs: Docs };
 
 async function route() {
   const [, name = "studio", ...rest] = location.hash.replace(/^#/, "").split("/");
@@ -208,6 +208,7 @@ async function Studio(root, [designId]) {
     abort: null,
     sessionTokens: { input: 0, output: 0, cost: 0 },
     tab: "params",
+    bom: null,
   };
 
   const settings = app.settings;
@@ -224,6 +225,10 @@ async function Studio(root, [designId]) {
   const picker = modelSelect({ "aria-label": "Model for this request" });
   const sendBtn = h("button", { class: "btn btn-primary", html: icons.send + "Generate" });
   const sessionMeter = h("span", { class: "hint tabular", style: "margin:0" });
+  // How to handle screws, inserts, magnets and other hardware for the next request.
+  const hwSel = h("select", { class: "hw-select", "aria-label": "Hardware for this request", title: "How to handle screws, inserts, magnets and other hardware" },
+    ...Object.entries(HARDWARE_MODES).map(([v, l]) => h("option", { value: v }, `Hardware: ${l}`)));
+  hwSel.value = app.settings.agent.hardware_mode || "ask";
   const tags = tagEditor(async (next) => (await api(`/api/designs/${s.designId}/tags`, { method: "PUT", json: { tags: next } })).tags);
   tags.el.hidden = true;
   const left = h("section", { class: "pane pane-left on-mobile", "data-m": "chat" },
@@ -232,7 +237,7 @@ async function Studio(root, [designId]) {
     chat,
     h("div", { class: "composer" }, prompt,
       h("div", { class: "composer-foot" }, picker, h("span", { class: "spacer" }), sendBtn),
-      h("div", { class: "row", style: "margin-top:6px" }, sessionMeter)));
+      h("div", { class: "row composer-meta" }, hwSel, h("span", { class: "spacer" }), sessionMeter)));
 
   // ---- center: stage
   const viewEl = h("div", { class: "viewer" });
@@ -349,11 +354,11 @@ async function Studio(root, [designId]) {
   saveBtn.addEventListener("click", () => saveVersion());
 
   // ---- tabs
-  const TABS = [["params", "Parameters"], ["code", "Code"], ["checks", "Checks"], ["history", "History"]];
+  const TABS = [["params", "Parameters"], ["code", "Code"], ["checks", "Checks"], ["parts", "Parts"], ["history", "History"]];
   function tabCount() {
     tabs.innerHTML = "";
     for (const [id, label] of TABS) {
-      const count = id === "params" ? s.params.length : id === "checks" && s.stats?.issues?.length ? s.stats.issues.length : id === "history" ? s.versions.length : null;
+      const count = id === "params" ? s.params.length : id === "checks" && s.stats?.issues?.length ? s.stats.issues.length : id === "history" ? s.versions.length : id === "parts" ? s.bom?.parts?.length || null : null;
       tabs.append(h("button", { class: `tab ${s.tab === id ? "on" : ""}`, role: "tab", "aria-selected": s.tab === id, "data-tab": id }, label, count ? h("span", { class: "count" }, count) : null));
     }
   }
@@ -370,6 +375,59 @@ async function Studio(root, [designId]) {
     if (s.tab === "params") return renderParams();
     if (s.tab === "checks") return renderChecks();
     if (s.tab === "history") return renderHistory();
+    if (s.tab === "parts") return renderParts();
+  }
+
+  async function loadBom() {
+    s.bom = s.designId ? await api(`/api/designs/${s.designId}/bom?version=${s.version}`).catch(() => null) : null;
+    if (s.tab === "parts") renderTab(); else tabCount();
+  }
+
+  // Parts used by the current version: what is on hand, what to buy, and where.
+  function renderParts() {
+    const wrap = h("div", { class: "checks" });
+    const b = s.bom;
+    if (!s.designId || !b) {
+      wrap.append(h("div", { class: "empty" }, h("h3", {}, "No parts yet"), "When a design uses screws, inserts, magnets or other hardware, the parts list appears here with what you have and where to buy the rest."));
+      tabBody.append(wrap); return;
+    }
+    const mode = b.hardware_mode && b.hardware_mode !== "ask" ? HARDWARE_MODES[b.hardware_mode] : null;
+    if (!b.parts.length) {
+      wrap.append(h("div", { class: "empty" }, h("h3", {}, "No hardware"), mode === HARDWARE_MODES.none ? "This version was designed without hardware." : "This version does not use any hardware."));
+      tabBody.append(wrap); return;
+    }
+    const toBuy = b.parts.filter((p) => p.to_buy);
+    wrap.append(h("div", { class: "row" },
+      h("strong", {}, `${b.parts.reduce((n, p) => n + p.quantity, 0)} parts`),
+      toBuy.length ? h("span", { class: "pill warn" }, `${toBuy.length} to buy`) : h("span", { class: "pill good" }, "All on hand"),
+      mode ? h("span", { class: "hint", style: "margin:0" }, mode) : null));
+    if (b.hardware_note) wrap.append(h("div", { class: "issue" }, b.hardware_note));
+    const list = h("div", { class: "bom" });
+    for (const p of b.parts) {
+      const status = p.status === "have" ? h("span", { class: "pill good" }, "Have") : p.status === "short" ? h("span", { class: "pill warn", title: `${p.on_hand} on hand` }, `Buy ${p.to_buy}`) : h("span", { class: "pill warn" }, `Buy ${p.to_buy}`);
+      list.append(h("div", { class: "bom-row" },
+        h("div", { class: "bom-qty tabular" }, `${p.quantity}x`),
+        h("div", { class: "bom-name" }, h("div", {}, p.name), p.use ? h("div", { class: "hint", style: "margin:0" }, p.use) : null,
+          p.status !== "have" ? h("div", { class: "bom-links" }, h("a", { href: p.links.bambu, target: "_blank", rel: "noopener noreferrer" }, "Bambu Lab Store"),
+            h("a", { href: p.links.amazon, target: "_blank", rel: "noopener noreferrer sponsored" }, "Amazon"),
+            p.links.other ? h("a", { href: p.links.other, target: "_blank", rel: "noopener noreferrer" }, "My link") : null) : null),
+        status));
+    }
+    wrap.append(list);
+    const fromStock = b.parts.some((p) => p.source === "inventory" && p.on_hand);
+    if (b.built) {
+      wrap.append(h("div", { class: "row" }, h("span", { class: "hint", style: "margin:0" }, `Marked as built ${ago(b.built.at)}; ${b.built.taken.reduce((n, t) => n + t.quantity, 0)} parts taken from your inventory.`),
+        h("button", { class: "btn btn-sm btn-ghost", onclick: async () => { await api(`/api/designs/${s.designId}/versions/${b.version}/built`, { method: "DELETE" }); toast("Parts returned to your inventory"); loadBom(); } }, "Undo")));
+    } else if (fromStock) {
+      wrap.append(h("div", { class: "row" }, h("button", { class: "btn btn-sm", onclick: async () => {
+        try {
+          const r = await api(`/api/designs/${s.designId}/versions/${b.version}/built`, { method: "POST" });
+          toast(`Took ${r.built.taken.reduce((n, t) => n + t.quantity, 0)} parts from your inventory`); loadBom();
+        } catch (err) { toast(err.message, "bad"); }
+      } }, "Mark as built"), h("span", { class: "hint", style: "margin:0" }, "Takes the parts you have out of your inventory.")));
+    }
+    wrap.append(h("p", { class: "hint" }, h("a", { href: "#/parts" }, "Manage your parts inventory")));
+    tabBody.append(wrap);
   }
 
   function renderParams() {
@@ -478,6 +536,7 @@ async function Studio(root, [designId]) {
   async function openVersion(v) {
     const ver = await api(`/api/designs/${s.designId}/versions/${v}`);
     s.version = v;
+    loadBom();
     setCode(ver.scad, true);
     s.params = ver.params;
     s.overrides = {};
@@ -613,12 +672,25 @@ async function Studio(root, [designId]) {
     sessionMeter.textContent = t.input || t.output ? `This session: ${fmtTokens(t.input + t.output)} tokens, ${fmtCost(t.cost)}` : "";
   }
 
-  async function generate() {
-    const text = prompt.value.trim();
+  // Show the hardware question as choices; picking one re-sends the request with it.
+  function askHardware(msgEl, ev, text) {
+    const box = h("div", { class: "question" }, h("p", {}, ev.message));
+    for (const o of ev.options) {
+      box.append(h("button", { class: "q-option", disabled: !!o.disabled, onclick: () => {
+        hwSel.value = o.value;
+        box.replaceChildren(h("p", { class: "hint", style: "margin:0" }, `${o.label}.`));
+        generate(text, true);
+      } }, h("strong", {}, o.label), h("span", {}, o.detail)));
+    }
+    msgEl.querySelector(".body").replaceWith(box);
+  }
+
+  async function generate(resend = null, isResend = false) {
+    const text = isResend ? resend : prompt.value.trim();
     if (!text || s.running) return;
     const [connection, model] = (picker.value || "").split("::");
     if (!connection) { toast("Add an AI connection and pick a model in Settings first.", "bad"); return; }
-    addUser(text);
+    if (!isResend) addUser(text);
     prompt.value = "";
     s.running = true;
     sendBtn.innerHTML = icons.stop + "Stop";
@@ -633,7 +705,7 @@ async function Studio(root, [designId]) {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, design_id: s.designId, code: s.code && s.code !== s.savedCode ? s.code : null, connection, model }),
+        body: JSON.stringify({ prompt: text, design_id: s.designId, code: s.code && s.code !== s.savedCode ? s.code : null, connection, model, hardware_mode: hwSel.value }),
         signal: s.abort.signal,
       });
       if (res.status === 401) { showLogin(); return; }
@@ -651,7 +723,8 @@ async function Studio(root, [designId]) {
           const ev = JSON.parse(line);
           if (ev.type === "status") status.lastChild.textContent = ev.message;
           else if (ev.type === "assistant") body.textContent = ev.text;
-          else if (ev.type === "tool") trace.append(h("div", {}, ev.name === "submit_design" ? "Saving design" : "Checking design"));
+          else if (ev.type === "tool") trace.append(h("div", {}, ev.name === "submit_design" ? "Saving design" : ev.name === "list_parts" ? "Looking up parts" : "Checking design"));
+          else if (ev.type === "question") askHardware(msgEl, ev, text);
           else if (ev.type === "check") trace.append(h("div", { class: ev.ok ? "ok" : "fail" }, ev.ok ? `Rendered: ${ev.stats.size_mm.join(" x ")} mm${ev.stats.issues.length ? `, ${ev.stats.issues.length} issue(s)` : ""}` : `Render failed: ${ev.error}`));
           else if (ev.type === "code") { setCode(ev.code); }
           else if (ev.type === "preview") { s.preview = ev.image; }
@@ -665,8 +738,10 @@ async function Studio(root, [designId]) {
             s.params = ev.params;
             s.overrides = {};
             s.stats = ev.stats;
+            if (ev.hardware_mode && ev.hardware_mode !== "ask") hwSel.value = ev.hardware_mode;
             await reloadDesign(false);
             renderModel();
+            if (ev.bom?.some((p) => p.to_buy)) msgEl.append(h("p", { class: "hint" }, `This design needs parts you don't have. `, h("a", { href: "#", onclick: (e) => { e.preventDefault(); s.tab = "parts"; renderTab(); } }, "See the parts list")));
           } else if (ev.type === "error") {
             totals = ev.totals || totals;
             msgEl.append(h("div", { class: "err-box" }, ev.message));
@@ -693,6 +768,7 @@ async function Studio(root, [designId]) {
   }
 
   sendBtn.addEventListener("click", () => (s.running ? s.abort?.abort() : generate()));
+  hwSel.addEventListener("change", () => hwSel.blur());
   prompt.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !e.shiftKey)) { e.preventDefault(); generate(); }
   });
@@ -711,6 +787,9 @@ async function Studio(root, [designId]) {
     tags.el.hidden = false;
     s.versions = d.versions;
     s.version = d.current_version;
+    const mode = d.versions.at(-1)?.hardware_mode;
+    if (mode && mode !== "ask") hwSel.value = mode;
+    loadBom();
     if (full) {
       setCode(d.code, true);
       s.params = d.params;
@@ -885,6 +964,177 @@ async function installClaudeCode(statusEl) {
   return info;
 }
 
+// ================================================================= PARTS
+const HARDWARE_MODES = { ask: "Ask me", inventory: "Use parts I have", order: "Buy parts as needed", none: "No hardware" };
+const AMAZON_SITES = ["amazon.com", "amazon.ca", "amazon.co.uk", "amazon.de", "amazon.fr", "amazon.it", "amazon.es", "amazon.nl", "amazon.se", "amazon.pl", "amazon.com.au", "amazon.co.jp", "amazon.in", "amazon.com.mx", "amazon.com.br"];
+
+function buyLinks(p) {
+  return h("span", { class: "bom-links" },
+    h("a", { href: p.links.bambu, target: "_blank", rel: "noopener noreferrer" }, "Bambu"),
+    h("a", { href: p.links.amazon, target: "_blank", rel: "noopener noreferrer sponsored" }, "Amazon"),
+    p.links.other ? h("a", { href: p.links.other, target: "_blank", rel: "noopener noreferrer" }, "My link") : null);
+}
+
+async function Parts(root) {
+  let filter = { q: "", category: "", low: false };
+  const page = h("div", { class: "page" });
+  const search = h("input", { type: "search", placeholder: "Search your parts", "aria-label": "Search parts" });
+  const catSel = h("select", { "aria-label": "Category" });
+  const lowOnly = h("input", { type: "checkbox", "aria-label": "Low stock only" });
+  const fileIn = h("input", { type: "file", accept: ".csv,text/csv", hidden: true });
+  const body = h("div", {});
+  page.append(
+    h("div", { class: "page-head" },
+      h("div", {}, h("h1", {}, "Parts"), h("p", {}, "The hardware you have on hand. When a design needs screws, inserts, magnets or bearings, the agent can design around these and tell you what to buy.")),
+      h("div", { class: "row" },
+        h("button", { class: "btn btn-primary", html: icons.plus + "Add from catalog", onclick: () => openCatalog() }),
+        h("button", { class: "btn", onclick: () => editPart(null) }, "Custom part"))),
+    h("div", { class: "lib-filters", style: "margin-bottom:16px" }, search, catSel,
+      h("label", { class: "switch" }, lowOnly, "Low stock only"),
+      h("span", { class: "spacer" }),
+      h("button", { class: "btn btn-sm btn-ghost", onclick: () => fileIn.click() }, "Import CSV"),
+      h("a", { class: "btn btn-sm btn-ghost", href: "/api/parts/export.csv", html: icons.download + "Export CSV" }), fileIn),
+    body);
+  root.append(page);
+  const catalog = await api("/api/parts/catalog");
+  catSel.append(h("option", { value: "" }, "All categories"), ...catalog.categories.map((c) => h("option", { value: c }, c[0].toUpperCase() + c.slice(1))));
+
+  async function load() {
+    const { parts } = await api(`/api/parts?q=${encodeURIComponent(filter.q)}&category=${encodeURIComponent(filter.category)}`);
+    const rows = filter.low ? parts.filter((p) => p.low) : parts;
+    body.innerHTML = "";
+    if (!rows.length) {
+      body.append(h("div", { class: "empty" }, h("h3", {}, filter.q || filter.category || filter.low ? "No parts match" : "No parts yet"),
+        filter.q || filter.category || filter.low ? "Try another search." : h("span", {}, "Add the screws, inserts and magnets you keep, and the agent will design around them. ",
+          h("a", { href: "#", onclick: (e) => { e.preventDefault(); openCatalog(); } }, "Add from the catalog"), ".")));
+      return;
+    }
+    const tbody = h("tbody");
+    for (const p of rows) {
+      const qty = h("input", { type: "number", min: 0, value: p.quantity, class: "qty-input", "aria-label": `Quantity of ${p.name}` });
+      qty.addEventListener("change", async () => { try { await api(`/api/parts/${p.id}`, { method: "PATCH", json: { quantity: Number(qty.value || 0) } }); load(); } catch (err) { toast(err.message, "bad"); } });
+      const step = (d) => async () => { await api(`/api/parts/${p.id}/adjust`, { method: "POST", json: { delta: d } }); load(); };
+      tbody.append(h("tr", { class: p.low ? "low" : "" },
+        h("td", {}, h("div", {}, p.name), h("div", { class: "hint", style: "margin:0" }, [p.type, p.material].filter(Boolean).join(", "))),
+        h("td", {}, p.category),
+        h("td", {}, h("div", { class: "qty" },
+          h("button", { class: "btn btn-sm btn-ghost", "aria-label": `One fewer ${p.name}`, onclick: step(-1) }, "\u2212"), qty,
+          h("button", { class: "btn btn-sm btn-ghost", "aria-label": `One more ${p.name}`, onclick: step(1) }, "+"),
+          p.low ? h("span", { class: "pill warn", title: `At or below ${p.low_stock}` }, "Low") : null)),
+        h("td", {}, buyLinks(p)),
+        h("td", { class: "r" }, h("button", { class: "btn btn-sm btn-ghost", onclick: () => editPart(p) }, "Edit"))));
+    }
+    body.append(h("div", { class: "section" }, h("div", { class: "section-body table-scroll" },
+      h("table", { class: "data parts-table" }, h("thead", {}, h("tr", {}, h("th", {}, "Part"), h("th", {}, "Category"), h("th", {}, "On hand"), h("th", {}, "Buy"), h("th", {}))), tbody))));
+  }
+
+  // Pick parts from the catalog and enter how many you have.
+  function openCatalog() {
+    let cat = "screw";
+    const q = h("input", { type: "search", placeholder: `Search ${catalog.parts.length} parts`, "aria-label": "Search the catalog" });
+    const cats = h("div", { class: "pp-vendors", role: "listbox", "aria-label": "Categories" });
+    const list = h("div", { class: "catalog-list" });
+    const close = h("button", { class: "btn" }, "Done");
+    const dialog = h("dialog", { class: "pp", "aria-label": "Add parts from the catalog" },
+      h("div", { class: "pp-head" }, h("div", {}, h("h2", {}, "Add parts"), h("p", {}, "Enter how many you have and select Add. Hole sizes for each part are included for the design agent.")), q),
+      h("div", { class: "pp-body" }, cats, list),
+      h("div", { class: "pp-foot" }, h("span", { class: "hint", style: "margin:0" }, "Missing something? Close this and add a custom part."), h("span", { class: "spacer" }), close));
+    document.body.append(dialog);
+    const render = () => {
+      cats.innerHTML = "";
+      for (const c of catalog.categories) {
+        cats.append(h("button", { class: `pp-vendor ${c === cat && !q.value ? "on" : ""}`, onclick: () => { cat = c; q.value = ""; render(); } },
+          h("span", {}, c[0].toUpperCase() + c.slice(1)), h("span", { class: "spacer" }), h("span", { class: "hint", style: "margin:0" }, catalog.parts.filter((p) => p.category === c).length)));
+      }
+      const words = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+      const items = catalog.parts.filter((p) => words.length ? words.every((w) => `${p.name} ${p.size} ${p.type} ${p.category}`.toLowerCase().includes(w)) : p.category === cat);
+      list.innerHTML = "";
+      for (const p of items.slice(0, 200)) {
+        const n = h("input", { type: "number", min: 1, value: p.category === "screw" ? 20 : 10, class: "qty-input", "aria-label": `How many ${p.name}` });
+        const add = h("button", { class: "btn btn-sm" }, "Add");
+        add.addEventListener("click", async () => {
+          try {
+            const r = await api("/api/parts", { method: "POST", json: { catalog_key: p.key, quantity: Number(n.value || 0) } });
+            add.textContent = `${r.quantity} on hand`; add.disabled = true; load();
+          } catch (err) { toast(err.message, "bad"); }
+        });
+        const holes = Object.entries(p.holes).filter(([k]) => k !== "note").slice(0, 3).map(([k, v]) => `${k.replace(/_/g, " ").replace(/ d$/, " \u2300")} ${v}`).join(" \u00b7 ");
+        list.append(h("div", { class: "catalog-row" }, h("div", {}, h("div", {}, p.name), h("div", { class: "hint", style: "margin:0" }, holes)), n, add));
+      }
+      if (!items.length) list.append(h("p", { class: "hint", style: "padding:16px" }, "No parts match."));
+    };
+    q.addEventListener("input", debounce(render, 150));
+    close.addEventListener("click", () => dialog.close());
+    dialog.addEventListener("close", () => dialog.remove());
+    render();
+    dialog.showModal();
+  }
+
+  // Add a custom part, or edit or remove one.
+  function editPart(p) {
+    const f = {};
+    const input = (name, label, attrs = {}) => {
+      const el = h("input", { id: `pe-${name}`, value: p?.[name] ?? "", ...attrs });
+      f[name] = el;
+      return h("div", { class: attrs.wide ? "full" : "" }, h("label", { for: el.id }, label), el);
+    };
+    const dl = h("datalist", { id: "pe-cats" }, ...catalog.categories.map((c) => h("option", { value: c })));
+    const save = h("button", { class: "btn btn-primary", type: "submit", form: "pe-form" }, p ? "Save" : "Add part");
+    const del = p ? h("button", { class: "btn btn-ghost btn-danger", type: "button" }, "Delete") : null;
+    const form = h("form", { class: "conn-fields", id: "pe-form" },
+      input("name", "Name", { type: "text", required: true, maxlength: 200, wide: true }),
+      input("category", "Category", { type: "text", list: "pe-cats", placeholder: "screw, magnet, bearing..." }),
+      input("size", "Size", { type: "text", placeholder: "M3 x 8, 6 x 3 mm..." }),
+      input("type", "Type", { type: "text", placeholder: "socket head, nyloc..." }),
+      input("material", "Material", { type: "text" }),
+      input("quantity", "On hand", { type: "number", min: 0 }),
+      input("low_stock", "Warn when at or below", { type: "number", min: 0, placeholder: "optional" }),
+      input("bambu_url", "Bambu Lab Store link", { type: "url", placeholder: "optional: replaces the store search", wide: true }),
+      input("amazon_url", "Amazon link", { type: "url", placeholder: "optional: replaces the Amazon search", wide: true }),
+      input("other_url", "Other shop link", { type: "url", placeholder: "optional", wide: true }),
+      input("notes", "Notes", { type: "text", wide: true }), dl);
+    const dialog = h("dialog", { class: "pp part-dialog", "aria-label": p ? `Edit ${p.name}` : "Add a custom part" },
+      h("div", { class: "pp-head" }, h("div", {}, h("h2", {}, p ? "Edit part" : "Add a custom part"), p?.catalog_key ? h("p", {}, "From the catalog. Hole sizes for the design agent come with it.") : h("p", {}, "For hardware that is not in the catalog."))),
+      h("div", { class: "term-body" }, form),
+      h("div", { class: "pp-foot" }, del, h("span", { class: "spacer" }), h("button", { class: "btn", type: "button", onclick: () => dialog.close() }, "Cancel"), save));
+    if (!p) f.quantity.value = 0;
+    document.body.append(dialog);
+    const submit = async (e) => {
+      e?.preventDefault();
+      const data = Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value.trim()]));
+      data.quantity = Number(data.quantity || 0);
+      data.low_stock = data.low_stock === "" ? null : Number(data.low_stock);
+      try {
+        await api(p ? `/api/parts/${p.id}` : "/api/parts", { method: p ? "PATCH" : "POST", json: data });
+        toast(p ? "Part saved" : "Part added"); dialog.close(); load();
+      } catch (err) { toast(err.message, "bad"); }
+    };
+    form.addEventListener("submit", submit);  // Enter in any field, or the Save button
+    del?.addEventListener("click", async () => {
+      if (!confirm(`Delete ${p.name} from your inventory?`)) return;
+      await api(`/api/parts/${p.id}`, { method: "DELETE" }); toast("Part deleted"); dialog.close(); load();
+    });
+    dialog.addEventListener("close", () => dialog.remove());
+    dialog.showModal();
+    f.name.focus();
+  }
+
+  fileIn.addEventListener("change", async () => {
+    const file = fileIn.files[0]; fileIn.value = "";
+    if (!file) return;
+    try {
+      const r = await api("/api/parts/import", { method: "POST", json: { csv: await file.text() } });
+      toast(`Imported: ${r.added} added, ${r.updated} updated${r.errors.length ? `, ${r.errors.length} skipped` : ""}`, r.errors.length ? "bad" : "");
+      if (r.errors.length) console.warn(r.errors);
+      load();
+    } catch (err) { toast(err.message, "bad"); }
+  });
+  search.addEventListener("input", debounce(() => { filter.q = search.value.trim(); load(); }, 200));
+  catSel.addEventListener("change", () => { filter.category = catSel.value; load(); });
+  lowOnly.addEventListener("change", () => { filter.low = lowOnly.checked; load(); });
+  await load();
+}
+
 // ================================================================= LIBRARY
 const SORT_LABELS = { "": "Best match", updated: "Recently updated", created: "Newest", title: "Title A to Z", largest: "Largest first", smallest: "Smallest first" };
 const SOURCE_LABELS = { studio: "Studio", mcp: "MCP", manual: "Manual" };
@@ -1032,6 +1282,8 @@ async function Library(root) {
           } }, t))) : null,
           h("div", { class: "row" },
             st.size_mm ? h("span", { class: "pill tabular" }, `${st.size_mm.map((n) => Math.round(n)).join(" x ")} mm`) : null,
+            d.hardware ? h("span", { class: `pill ${d.hardware.to_buy ? "warn" : ""}`, title: `${d.hardware.parts} hardware parts${d.hardware.to_buy ? `; ${d.hardware.to_buy} kind${d.hardware.to_buy === 1 ? "" : "s"} to buy` : ", all on hand"}` },
+              `${d.hardware.parts} part${d.hardware.parts === 1 ? "" : "s"}${d.hardware.to_buy ? `, ${d.hardware.to_buy} to buy` : ""}`) : null,
             h("span", { class: "spacer" }),
             h("button", { class: "btn btn-ghost btn-sm btn-danger", title: "Delete design", onclick: async (e) => {
               e.preventDefault();
@@ -1260,7 +1512,7 @@ async function Settings(root, [flag] = []) {
 
   page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Settings"), h("p", {}, "Changes apply immediately. Nothing needs a restart or rebuild."))));
   const toc = h("nav", { class: "toc", "aria-label": "Settings sections" },
-    ...[["connections", "AI connections"], ["agent", "Design agent"], ["printer", "Printers"], ["render", "Rendering"], ["access", "Access and MCP"], ["pricing", "Pricing"], ["about", "About"]].map(([id, l]) => h("a", { href: `#/settings`, onclick: (e) => { e.preventDefault(); $(`#sec-${id}`).scrollIntoView({ behavior: "smooth", block: "start" }); } }, l)));
+    ...[["connections", "AI connections"], ["agent", "Design agent"], ["printer", "Printers"], ["render", "Rendering"], ["access", "Access and MCP"], ["pricing", "Pricing"], ["parts", "Parts and shopping"], ["about", "About"]].map(([id, l]) => h("a", { href: `#/settings`, onclick: (e) => { e.preventDefault(); $(`#sec-${id}`).scrollIntoView({ behavior: "smooth", block: "start" }); } }, l)));
   const body = h("div", {});
   page.append(h("div", { class: "settings-layout" }, toc, body));
   root.append(page);
@@ -1526,22 +1778,33 @@ async function Settings(root, [flag] = []) {
     const sec = app.settings.security;
     const cur = h("input", { type: "password", id: "pw-cur", autocomplete: "current-password" });
     const nw = h("input", { type: "password", id: "pw-new", autocomplete: "new-password" });
+    // A real form: Enter submits, and password managers recognise the current and new
+    // password (the hidden username field tells them which account this is).
+    const pwForm = h("form", { class: "pw-form", autocomplete: "on" },
+      h("input", { type: "text", name: "username", autocomplete: "username", value: "buildplate", hidden: true, readonly: true }),
+      h("div", { class: "pw-row" },
+        sec.password_enabled ? field("Current password", cur) : null,
+        field(sec.password_enabled ? "New password" : "Password", nw),
+        h("div", { class: "pw-action" }, h("button", { class: "btn", type: "submit" }, sec.password_enabled ? "Change password" : "Set password"))),
+      h("p", { class: "hint" }, sec.password_enabled
+        ? "At least 8 characters. To remove the password, leave New password empty and select Change password."
+        : "At least 8 characters."));
+    pwForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (sec.password_enabled && !nw.value && !confirm("Remove the password? Anyone who can reach this address will be able to use Buildplate.")) return;
+      try {
+        const r = await api("/api/settings/password", { method: "POST", json: { current: cur.value, new: nw.value } });
+        toast(r.password_enabled ? "Password saved" : "Password removed");
+        await loadSettings(); renderAccess();
+        $("#logout").hidden = !r.password_enabled;
+      } catch (err) { toast(err.message, "bad"); }
+    });
     const mcpUrl = `${location.origin}/mcp`;
     const reveal = h("div", {});
     accessWrap.append(
       h("h3", { class: "h3" }, "Web interface password"),
       h("p", { class: "hint", style: "margin:0 0 10px" }, sec.password_enabled ? "A password is required to open Buildplate." : "Anyone who can reach this address can use Buildplate and your API keys. Set a password unless it sits behind an authenticating proxy."),
-      h("div", { class: "grid-3", style: "align-items:end" },
-        sec.password_enabled ? field("Current password", cur) : null,
-        field(sec.password_enabled ? "New password" : "Password", nw, "At least 8 characters. Leave empty and save to remove."),
-        h("div", {}, h("button", { class: "btn", onclick: async () => {
-          try {
-            const r = await api("/api/settings/password", { method: "POST", json: { current: cur.value, new: nw.value } });
-            toast(r.password_enabled ? "Password saved" : "Password removed");
-            await loadSettings(); renderAccess();
-            $("#logout").hidden = !r.password_enabled;
-          } catch (err) { toast(err.message, "bad"); }
-        } }, sec.password_enabled ? "Change password" : "Set password"))),
+      pwForm,
       h("h3", { class: "h3", style: "margin-top:24px" }, "MCP endpoint"),
       h("p", { class: "hint", style: "margin:0 0 10px" }, "Connect Claude Desktop, Claude Code or any MCP client to use Buildplate's renderer, validator, library and design agent."),
       h("dl", { class: "kv" }, h("dt", {}, "Server URL"), h("dd", { class: "mono" }, mcpUrl), h("dt", {}, "Bearer token"), h("dd", {}, sec.mcp_token_set ? h("span", { class: "pill good" }, `Required (${sec.mcp_token_hint})`) : h("span", { class: "pill warn" }, "Not set: the endpoint is open"))),
@@ -1671,6 +1934,12 @@ async function Settings(root, [flag] = []) {
         field("Preview colours", bind("render.colorscheme", "select", { options: ["Tomorrow", "Cornfield", "Metallic", "Sunset", "Starnight", "BeforeDawn", "Nature", "DeepOcean", "Solarized", "Tomorrow Night", "Monotone"].map((c) => [c, c]) })))),
     section("access", "Access and MCP", null, accessWrap),
     section("pricing", "Pricing overrides", "Costs come from LiteLLM's price list. Add a price here for models it does not know, or to match a negotiated rate. Local models are free.", priceWrap),
+    section("parts", "Parts and shopping", "How the design agent handles hardware, and where buy links for parts point.",
+      h("div", { class: "grid-2" },
+        field("Hardware by default", bind("agent.hardware_mode", "select", { options: Object.entries(HARDWARE_MODES) }), "Ask me shows a choice when a request needs screws, inserts, magnets or other hardware. You can change it per request in Studio."),
+        field("Bambu Lab Store", bind("parts.store_region", "select", { options: [["us", "United States"], ["ca", "Canada"], ["eu", "Europe"], ["uk", "United Kingdom"], ["au", "Australia"], ["asia", "Asia"]] }), "The regional store buy links search."),
+        field("Amazon site", bind("parts.amazon_domain", "select", { options: AMAZON_SITES.map((d) => [d, d]) })),
+        field("Amazon associate tag", bind("parts.amazon_tag", "text", { placeholder: "optional, e.g. yourtag-20", maxlength: 40 }), "Added to Amazon links if you have an Amazon Associates account. Leave empty for plain links."))),
     section("about", "About", null,
       h("div", { class: "about" },
         h("div", { class: "about-text" },
@@ -1862,6 +2131,7 @@ const DOCS = [
   ["getting-started", "Getting started"],
   ["providers", "AI connections"],
   ["using-studio", "Using Studio"],
+  ["parts", "Parts inventory"],
   ["token-usage", "Token usage and cost"],
   ["mcp", "MCP integration"],
   ["unraid", "Unraid"],

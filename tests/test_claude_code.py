@@ -228,7 +228,7 @@ def test_design_run_through_claude_code(server):
     log = json.loads((env.claude_code.config_dir(cid) / "last-run.json").read_text())
     args = log["args"]
     assert args[args.index("--tools") + 1] == "" and "--restricted" in args and "--strict-mcp-config" in args
-    assert args[args.index("--allowedTools") + 1] == "mcp__buildplate__check_design,mcp__buildplate__submit_design"
+    assert args[args.index("--allowedTools") + 1] == "mcp__buildplate__check_design,mcp__buildplate__submit_design,mcp__buildplate__list_parts"
     assert args[args.index("--permission-mode") + 1] == "dontAsk" and "--no-session-persistence" in args
     assert "ANTHROPIC_API_KEY" not in log["env"] and "CLAUDE_CODE_USE_BEDROCK" not in log["env"]
     assert log["cwd_files"] == [".mcp-run.json"]  # an empty working folder apart from the MCP config

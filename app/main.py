@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
-from . import agent, auth, auth_methods, claude_code, claude_runtime, config, connections, db, openscad, printers, search, terminal
+from . import agent, auth, auth_methods, claude_code, claude_runtime, config, connections, db, openscad, parts, printers, search, terminal
 from .mcp_server import mcp
 from .settings import public_connection, store
 
@@ -87,6 +87,32 @@ class GenerateBody(BaseModel):
     connection: str | None = None
     model: str | None = None
     provider: str | None = None  # pre-connections: a provider family
+    hardware_mode: str | None = None  # ask | inventory | order | none; default from settings
+
+
+class PartBody(BaseModel):
+    catalog_key: str = ""
+    category: str | None = None
+    name: str | None = None
+    size: str | None = None
+    type: str | None = None
+    material: str | None = None
+    quantity: int | None = None
+    low_stock: int | None = None
+    bambu_url: str | None = None
+    amazon_url: str | None = None
+    other_url: str | None = None
+    notes: str | None = None
+    dims: dict[str, Any] | None = None
+    holes: dict[str, Any] | None = None
+
+
+class AdjustBody(BaseModel):
+    delta: int = Field(ge=-1_000_000, le=1_000_000)
+
+
+class CsvBody(BaseModel):
+    csv: str = Field(max_length=2_000_000)
 
 
 class RenderBody(BaseModel):
@@ -474,7 +500,8 @@ async def clear_cache():
 async def generate(body: GenerateBody):
     async def stream():
         async for ev in agent.run(
-            body.prompt, body.design_id, body.code, connection=body.connection, model=body.model, provider=body.provider
+            body.prompt, body.design_id, body.code, connection=body.connection, model=body.model, provider=body.provider,
+            hardware_mode=body.hardware_mode,
         ):
             yield json.dumps(ev) + "\n"
 
@@ -533,7 +560,10 @@ async def designs(
 ):
     try:
         f = search.filters(tags, provider, model, source, printer, min_size, max_size, after, before)
-        return {"designs": db.list_designs(limit, q, f, sort)}
+        rows = db.list_designs(limit, q, f, sort)
+        for r in rows:
+            r["hardware"] = parts.bom_summary(json.loads(r.pop("bom", None) or "null"))
+        return {"designs": rows}
     except ValueError as exc:
         raise HTTPException(400, str(exc))
 
@@ -563,7 +593,88 @@ async def design(design_id: str):
     v = db.get_version(design_id)
     d["code"] = v["scad"] if v else ""
     d["params"] = openscad.parse_parameters(d["code"])
+    for ver in d["versions"]:
+        ver["bom"] = json.loads(ver.get("bom") or "null")
+        ver["built"] = json.loads(ver.get("built") or "null")
     return d
+
+
+# ---- parts inventory ---------------------------------------------------------------
+def _parts_errors(fn, *args):
+    try:
+        return fn(*args)
+    except KeyError:
+        raise HTTPException(404, "No part with that id")
+    except parts.PartsError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/api/parts")
+async def list_parts(q: str = "", category: str = ""):
+    return {"parts": parts.list_inventory(q, category)}
+
+
+@app.get("/api/parts/catalog")
+async def parts_catalog():
+    return parts.catalog()
+
+
+@app.post("/api/parts")
+async def create_part(body: PartBody):
+    return _parts_errors(parts.create, body.model_dump(exclude_none=True))
+
+
+@app.patch("/api/parts/{part_id}")
+async def update_part(part_id: str, body: PartBody):
+    return _parts_errors(parts.update, part_id, body.model_dump(exclude_unset=True))
+
+
+@app.post("/api/parts/{part_id}/adjust")
+async def adjust_part(part_id: str, body: AdjustBody):
+    return _parts_errors(parts.adjust, part_id, body.delta)
+
+
+@app.delete("/api/parts/{part_id}")
+async def delete_part(part_id: str):
+    _parts_errors(parts.delete, part_id)
+    return {"ok": True}
+
+
+@app.get("/api/parts/export.csv")
+async def export_parts():
+    return PlainTextResponse(parts.export_csv(), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="buildplate-parts.csv"'})
+
+
+@app.post("/api/parts/import")
+async def import_parts(body: CsvBody):
+    return _parts_errors(parts.import_csv, body.csv)
+
+
+@app.get("/api/designs/{design_id}/bom")
+async def design_bom(design_id: str, version: int | None = None):
+    """The parts a design version uses, with what is on hand and where to buy the rest."""
+    v = db.get_version(design_id, version)
+    if not v:
+        raise HTTPException(404, "Design not found")
+    return {
+        "version": v["version"],
+        "hardware_mode": v.get("hardware_mode"),
+        "hardware_note": v.get("hardware_note") or "",
+        "built": json.loads(v.get("built") or "null"),
+        "parts": parts.resolve_bom(json.loads(v.get("bom") or "[]")),
+    }
+
+
+@app.post("/api/designs/{design_id}/versions/{version}/built")
+async def mark_built(design_id: str, version: int):
+    """Take this version's parts out of the inventory."""
+    return {"built": _parts_errors(parts.mark_built, design_id, version)}
+
+
+@app.delete("/api/designs/{design_id}/versions/{version}/built")
+async def unmark_built(design_id: str, version: int):
+    _parts_errors(parts.unmark_built, design_id, version)
+    return {"ok": True}
 
 
 @app.get("/api/designs/{design_id}/versions/{version}")
