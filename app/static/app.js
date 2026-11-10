@@ -1503,22 +1503,33 @@ async function Settings(root) {
     const sec = app.settings.security;
     const cur = h("input", { type: "password", id: "pw-cur", autocomplete: "current-password" });
     const nw = h("input", { type: "password", id: "pw-new", autocomplete: "new-password" });
+    // A real form: Enter submits, and password managers recognise the current and new
+    // password (the hidden username field tells them which account this is).
+    const pwForm = h("form", { class: "pw-form", autocomplete: "on" },
+      h("input", { type: "text", name: "username", autocomplete: "username", value: "buildplate", hidden: true, readonly: true }),
+      h("div", { class: "pw-row" },
+        sec.password_enabled ? field("Current password", cur) : null,
+        field(sec.password_enabled ? "New password" : "Password", nw),
+        h("div", { class: "pw-action" }, h("button", { class: "btn", type: "submit" }, sec.password_enabled ? "Change password" : "Set password"))),
+      h("p", { class: "hint" }, sec.password_enabled
+        ? "At least 8 characters. To remove the password, leave New password empty and select Change password."
+        : "At least 8 characters."));
+    pwForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (sec.password_enabled && !nw.value && !confirm("Remove the password? Anyone who can reach this address will be able to use Buildplate.")) return;
+      try {
+        const r = await api("/api/settings/password", { method: "POST", json: { current: cur.value, new: nw.value } });
+        toast(r.password_enabled ? "Password saved" : "Password removed");
+        await loadSettings(); renderAccess();
+        $("#logout").hidden = !r.password_enabled;
+      } catch (err) { toast(err.message, "bad"); }
+    });
     const mcpUrl = `${location.origin}/mcp`;
     const reveal = h("div", {});
     accessWrap.append(
       h("h3", { class: "h3" }, "Web interface password"),
       h("p", { class: "hint", style: "margin:0 0 10px" }, sec.password_enabled ? "A password is required to open Buildplate." : "Anyone who can reach this address can use Buildplate and your API keys. Set a password unless it sits behind an authenticating proxy."),
-      h("div", { class: "grid-3", style: "align-items:end" },
-        sec.password_enabled ? field("Current password", cur) : null,
-        field(sec.password_enabled ? "New password" : "Password", nw, "At least 8 characters. Leave empty and save to remove."),
-        h("div", {}, h("button", { class: "btn", onclick: async () => {
-          try {
-            const r = await api("/api/settings/password", { method: "POST", json: { current: cur.value, new: nw.value } });
-            toast(r.password_enabled ? "Password saved" : "Password removed");
-            await loadSettings(); renderAccess();
-            $("#logout").hidden = !r.password_enabled;
-          } catch (err) { toast(err.message, "bad"); }
-        } }, sec.password_enabled ? "Change password" : "Set password"))),
+      pwForm,
       h("h3", { class: "h3", style: "margin-top:24px" }, "MCP endpoint"),
       h("p", { class: "hint", style: "margin:0 0 10px" }, "Connect Claude Desktop, Claude Code or any MCP client to use Buildplate's renderer, validator, library and design agent."),
       h("dl", { class: "kv" }, h("dt", {}, "Server URL"), h("dd", { class: "mono" }, mcpUrl), h("dt", {}, "Bearer token"), h("dd", {}, sec.mcp_token_set ? h("span", { class: "pill good" }, `Required (${sec.mcp_token_hint})`) : h("span", { class: "pill warn" }, "Not set: the endpoint is open"))),
