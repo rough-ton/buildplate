@@ -123,6 +123,10 @@ class RenderBody(BaseModel):
     view: str = "iso"
 
 
+class ParamValuesBody(BaseModel):
+    values: dict[str, Any] = Field(default_factory=dict)
+
+
 class CodeBody(BaseModel):
     code: str
     title: str = "Untitled"
@@ -643,10 +647,21 @@ async def design(design_id: str):
     v = db.get_version(design_id)
     d["code"] = v["scad"] if v else ""
     d["params"] = openscad.parse_parameters(d["code"])
+    d["param_values"] = _param_values(v)
     for ver in d["versions"]:
         ver["bom"] = json.loads(ver.get("bom") or "null")
         ver["built"] = json.loads(ver.get("built") or "null")
+        ver["param_values"] = _param_values(ver)
     return d
+
+
+def _param_values(v: dict[str, Any] | None) -> dict[str, Any]:
+    """The parameter values tuned in Studio for a version ({} when none)."""
+    try:
+        out = json.loads((v or {}).get("param_values") or "{}")
+    except ValueError:
+        return {}
+    return out if isinstance(out, dict) else {}
 
 
 # ---- parts inventory ---------------------------------------------------------------
@@ -733,7 +748,26 @@ async def design_version(design_id: str, version: int):
     if not v:
         raise HTTPException(404)
     v["params"] = openscad.parse_parameters(v["scad"])
+    v["param_values"] = _param_values(v)
     return v
+
+
+@app.put("/api/designs/{design_id}/versions/{version}/params")
+async def save_param_values(design_id: str, version: int, body: ParamValuesBody):
+    """Keep the values tuned with the Parameters sliders, so they come back next time."""
+    v = db.get_version(design_id, version)
+    if not v:
+        raise HTTPException(404, "Design not found")
+    known = {p["name"] for p in openscad.parse_parameters(v["scad"])}
+    values = {}
+    for name, val in body.values.items():
+        if name not in known:
+            continue  # a parameter the code no longer declares
+        if not isinstance(val, (bool, int, float, str)) or (isinstance(val, str) and len(val) > 500):
+            raise HTTPException(400, f"Unsupported value for {name}")
+        values[name] = val
+    db.set_param_values(design_id, version, values)
+    return {"param_values": values}
 
 
 @app.post("/api/designs/{design_id}/versions")
@@ -801,7 +835,8 @@ async def download(design_id: str, format: str = "stl", version: int | None = No
     stem = f"{stem}-v{v['version']}"
     if format == "scad":
         return Response(v["scad"], media_type="text/plain", headers={"Content-Disposition": f'attachment; filename="{stem}.scad"'})
-    overrides = json.loads(params) if params else None
+    # Without explicit values, a download matches what Studio shows: the saved tuned values.
+    overrides = json.loads(params) if params else (_param_values(v) or None)
     try:
         if format == "3mf":
             p = await openscad.export_3mf(v["scad"], overrides)

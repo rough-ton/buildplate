@@ -55,7 +55,11 @@ Dragging a slider re-renders the part on the server. This uses no AI and no toke
 - **Reset** returns every parameter to the value in the code.
 - **Apply to code** writes the current values into the code as the new defaults. Save a version to keep them.
 
-Exports use the parameter values you have set.
+The values you set are saved with the design version, so they are still there when you leave Studio and come back, or open the design on another device. Each version keeps its own values.
+
+Exports use the parameter values you have set, including downloads from the Library. A `.scad` download is the code as written; use **Apply to code** first to make your values its defaults.
+
+When you ask the AI for a change, your values go with the request as the code's defaults, so the new version keeps them.
 
 ## Editing code
 
