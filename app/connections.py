@@ -17,7 +17,7 @@ from . import auth_methods
 from .auth_methods import AuthMethod, MethodError
 from .settings import public_connection, store
 
-STATES = ("connected", "needs_sign_in", "expired", "error", "untested")
+STATES = ("connected", "needs_sign_in", "expired", "error", "untested", "not_installed")
 
 
 @dataclass
@@ -130,7 +130,8 @@ def delete(cid: str) -> None:
     store.set_connections([c for c in conns if c["id"] != cid])
 
 
-def _set_status(cid: str, state: str, detail: str = "", models: list[str] | None = None) -> None:
+def mark(cid: str, state: str, detail: str = "", models: list[str] | None = None) -> None:
+    """Record a connection's status (and optionally its models)."""
     conns = all_()
     for c in conns:
         if c["id"] == cid:
@@ -141,16 +142,32 @@ def _set_status(cid: str, state: str, detail: str = "", models: list[str] | None
 
 
 async def test(cid: str) -> list[str]:
-    """Check a connection by listing its models. Saves the models and the status."""
+    """Check a connection by listing its models (for Claude Code, by asking the CLI
+    whether it is signed in). Saves the models and the status."""
     conn = get(cid)
     method = auth_methods.get(conn["method"])
+    if method.kind == "cli_session":
+        from . import claude_code
+
+        try:
+            st = await claude_code.auth_status(cid)
+        except claude_code.ClaudeCodeError as exc:
+            mark(cid, "error", str(exc))
+            raise MethodError(str(exc)) from exc
+        models = await method.list_models({})
+        mark(cid, st["state"], st["detail"], models)
+        if st["state"] != "connected":
+            raise MethodError(st["detail"])
+        if not store.get()["agent"]["connection"]:
+            store.update({"agent": {"connection": cid, "model": models[0]}})
+        return models
     try:
         method.validate(values(conn))
         models = await method.list_models(values(conn))
     except MethodError as exc:
-        _set_status(cid, "error", str(exc))
+        mark(cid, "error", str(exc))
         raise
-    _set_status(cid, "connected", f"{len(models)} models", models)
+    mark(cid, "connected", f"{len(models)} models", models)
     if not store.get()["agent"]["connection"] and models:
         store.update({"agent": {"connection": cid, "model": models[0]}})
     return models

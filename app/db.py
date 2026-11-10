@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS runs (
     cost_known INTEGER NOT NULL DEFAULT 1,
     connection_id TEXT,
     auth_method TEXT,
-    billing TEXT
+    billing TEXT,
+    est_cost_usd REAL
 );
 CREATE TABLE IF NOT EXISTS run_steps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,7 +110,7 @@ _conn: sqlite3.Connection | None = None
 
 # Columns added after the first release: table -> {column: type}.
 _ADDED_COLUMNS = {
-    "runs": {"connection_id": "TEXT", "auth_method": "TEXT", "billing": "TEXT"},
+    "runs": {"connection_id": "TEXT", "auth_method": "TEXT", "billing": "TEXT", "est_cost_usd": "REAL"},
 }
 
 # Bump when the search index layout or contents change; existing databases are
@@ -570,6 +571,28 @@ def add_step(run_id: str, step: int, usage: dict[str, Any], duration_ms: int, to
         )
 
 
+def set_run_model(run_id: str, model: str) -> None:
+    """Record the model a run actually used, when the runtime resolved an alias."""
+    with tx() as c:
+        c.execute("UPDATE runs SET model=? WHERE id=?", (model[:120], run_id))
+
+
+def set_run_totals(run_id: str, totals: dict[str, Any], est_cost_usd: float, iterations: int) -> None:
+    """Overwrite a run's token totals with the runtime's final figures. For plan
+    (subscription) runs cost_usd stays 0 and est_cost_usd keeps the API-equivalent
+    estimate."""
+    with tx() as c:
+        c.execute(
+            "UPDATE runs SET input_tokens=?, output_tokens=?, cache_read_tokens=?, cache_write_tokens=?, "
+            "est_cost_usd=?, iterations=? WHERE id=?",
+            (
+                int(totals.get("input_tokens", 0)), int(totals.get("output_tokens", 0)),
+                int(totals.get("cache_read_tokens", 0)), int(totals.get("cache_write_tokens", 0)),
+                round(float(est_cost_usd), 6), int(iterations), run_id,
+            ),
+        )
+
+
 def finish_run(run_id: str, status: str, error: str | None = None, design_id: str | None = None) -> None:
     with tx() as c:
         c.execute(
@@ -610,7 +633,9 @@ def usage_summary(days: int = 30) -> dict[str, Any]:
             c.execute(
                 "SELECT COUNT(*) AS runs, COALESCE(SUM(input_tokens),0) AS input_tokens, "
                 "COALESCE(SUM(output_tokens),0) AS output_tokens, COALESCE(SUM(cache_read_tokens),0) AS cache_read_tokens, "
-                "COALESCE(SUM(cost_usd),0) AS cost_usd, COALESCE(AVG(input_tokens+output_tokens),0) AS avg_tokens "
+                "COALESCE(SUM(cost_usd),0) AS cost_usd, COALESCE(AVG(input_tokens+output_tokens),0) AS avg_tokens, "
+                "COALESCE(SUM(billing='subscription'),0) AS plan_runs, "
+                "COALESCE(SUM(CASE WHEN billing='subscription' THEN est_cost_usd ELSE 0 END),0) AS plan_est_cost_usd "
                 "FROM runs WHERE started_at>=?",
                 (since,),
             ).fetchone()
@@ -625,9 +650,9 @@ def usage_summary(days: int = 30) -> dict[str, Any]:
         )
         by_model = _rows(
             c.execute(
-                "SELECT provider, model, COUNT(*) AS runs, SUM(input_tokens) AS input_tokens, "
-                "SUM(output_tokens) AS output_tokens, SUM(cost_usd) AS cost_usd "
-                "FROM runs WHERE started_at>=? GROUP BY provider, model ORDER BY cost_usd DESC, runs DESC",
+                "SELECT provider, model, COALESCE(billing, 'api') AS billing, COUNT(*) AS runs, SUM(input_tokens) AS input_tokens, "
+                "SUM(output_tokens) AS output_tokens, SUM(cost_usd) AS cost_usd, SUM(COALESCE(est_cost_usd, 0)) AS est_cost_usd "
+                "FROM runs WHERE started_at>=? GROUP BY provider, model, 3 ORDER BY cost_usd DESC, runs DESC",
                 (since,),
             )
         )

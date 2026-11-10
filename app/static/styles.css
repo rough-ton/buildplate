@@ -486,3 +486,12 @@ dialog.pp::backdrop { background: rgba(19, 24, 30, .45); }
   .pp-illo .printer-icon { width: 96px; height: 74px; }
 }
 .printer-chip { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ---------- Claude Code sign-in terminal ---------- */
+dialog.pp.term { width: min(900px, calc(100vw - 32px)); height: fit-content; max-height: calc(100vh - 32px); }
+.term-body { padding: 16px 24px 4px; overflow: auto; }
+.term-link { margin-bottom: 10px; }
+.term-screen { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; background: var(--sunken); overflow-x: auto; }
+.term .pp-foot input { width: min(360px, 40vw); height: 30px; font-size: 12.5px; }
+.conn-actions { margin: 10px 0 0 44px; }
+@media (max-width: 720px) { .conn-actions { margin-left: 0; } .term .pp-foot { flex-wrap: wrap; } .term .pp-foot input { width: 100%; } }

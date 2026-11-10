@@ -64,12 +64,31 @@ ADMIN_REQUIRED = (
 )
 
 
-def admin_allowed(request: Request) -> bool:
+PASSWORD_REQUIRED = (
+    "Set a UI password first (Settings > Access and MCP), then sign in. Claude plan connections "
+    "always need a password, even on the server itself."
+)
+
+
+def password_session(cookies: dict[str, str]) -> bool:
+    """A UI password is set and these cookies carry a valid session for it."""
+    return store.password_enabled() and valid_session(cookies.get(COOKIE))
+
+
+def admin_allowed(request: Request, strict: bool = False) -> bool:
     """Changing AI connections needs a signed-in UI password session, or a request from
-    the server itself. An MCP bearer token is not enough."""
-    if store.password_enabled() and valid_session(request.cookies.get(COOKIE)):
+    the server itself. An MCP bearer token is not enough. With strict, only a password
+    session counts (used for Claude plan connections and their sign-in terminal)."""
+    if password_session(request.cookies):
         return True
-    return is_loopback(request)
+    return not strict and is_loopback(request)
+
+
+def same_origin(headers) -> bool:
+    """The browser's Origin matches the Host it connected to (WebSocket CSRF check)."""
+    origin = headers.get("origin", "")
+    host = headers.get("host", "")
+    return bool(origin and host) and origin.split("://", 1)[-1].rstrip("/") == host
 
 
 def mcp_allowed(request: Request) -> bool:

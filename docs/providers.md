@@ -9,6 +9,7 @@ Connections live in **Settings > AI connections** and take effect immediately.
 | Provider | Method | What you enter | Billing | Where to get it |
 | --- | --- | --- | --- | --- |
 | Anthropic | Claude API key | API key | Pay per use | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+| Anthropic | Claude plan (Claude Code) | Nothing: you sign in to Claude | Uses your plan | A Claude Pro, Max, Team or Enterprise plan. See [below](#claude-plan) |
 | OpenAI | OpenAI API key | API key | Pay per use | [platform.openai.com](https://platform.openai.com/api-keys) |
 | Google Gemini | Gemini API key | API key | Pay per use | [aistudio.google.com](https://aistudio.google.com/apikey) |
 | OpenRouter | OpenRouter API key | API key | Pay per use | [openrouter.ai](https://openrouter.ai/keys) |
@@ -19,7 +20,7 @@ Connections live in **Settings > AI connections** and take effect immediately.
 | Ollama | Ollama | Base URL | Local | Your Ollama server, for example `http://192.168.1.10:11434` |
 | OpenAI-compatible | OpenAI-compatible server | Base URL and optional key | Local | LM Studio, vLLM, LocalAI, llama.cpp server, LiteLLM proxy |
 
-Every request records which connection it used and how it is billed. Consumer chat subscriptions (such as Claude Pro or ChatGPT Plus) cannot be used yet. Support for signing in with a subscription through each vendor's own sanctioned method is planned.
+Every request records which connection it used and how it is billed. A Claude plan can be used through Claude Code, as described below. Other consumer subscriptions, such as ChatGPT Plus, cannot be used yet.
 
 ## Adding a connection
 
@@ -36,6 +37,28 @@ On each connection card:
 - **Test** checks the connection again and refreshes the model list.
 - **Edit** renames it, replaces the key (leave the key box empty to keep the saved one) or changes the URL. **Remove connection** deletes it and its saved credentials.
 - The switch turns the connection off without deleting it. Its models leave the pickers.
+
+## Claude plan
+
+The **Claude plan (Claude Code)** connection uses your Claude Pro, Max, Team or Enterprise plan instead of an API key. Buildplate runs [Claude Code](https://code.claude.com), Anthropic's own command-line app, unmodified, and you sign in to it with your Claude account through Claude Code's own login.
+
+**Before you start:** set a web UI password and sign in. Claude plan connections always need one, even from the server itself.
+
+1. Under **Add a connection**, choose **Anthropic > Claude plan (Claude Code)**, name it, and select **Add and sign in**.
+2. The first time, Buildplate downloads Claude Code (about 280 MB) from Anthropic into the data folder and checks it against Anthropic's published checksum. This needs internet access from the container.
+3. A terminal opens running Claude Code's sign-in. Open the link it shows, sign in to your Claude account and approve access, then copy the code the page shows and paste it into the terminal (or the box under it) and press Enter.
+4. When it says the sign-in worked, close the terminal. The card shows **Connected** and the plan type.
+
+Pick `sonnet`, `opus`, `haiku` or `fable` from the model picker. Claude Code resolves each to the newest model of that tier; Usage records the exact model. You can also type a full model ID.
+
+How it works and what it can do:
+
+- Claude Code keeps your sign-in in its own files inside the data folder (`/data/claude-code/<connection>`). Buildplate never reads, copies or stores your Claude credentials; it asks Claude Code whether it is signed in.
+- Each Claude plan connection has its own sign-in, so you can add a work plan and a personal plan side by side.
+- For each request, Buildplate runs Claude Code with all of its built-in tools turned off (no shell, file or web access) in an empty folder. Claude Code can only call Buildplate's `check_design` and `submit_design`, through a private endpoint that only accepts that request's one-time token.
+- Requests use your plan's normal usage limits. Studio and Usage show **Included in plan** instead of a cost, with the API-price equivalent on hover. When the plan's limit is reached, the request stops with a message saying so.
+- **Sign out** on the card signs Claude Code out. Removing the connection signs out and deletes its Claude Code folder.
+- Buildplate does not resell or pay for Claude usage. You use your own plan under your own agreement with Anthropic.
 
 ## Choosing a model
 

@@ -18,7 +18,8 @@ Buildplate runs as a single Docker container. Point it at the AI provider you al
 ## Highlights
 
 - **One container, nothing to install.** OpenSCAD with the Manifold engine, headless rendering, BOSL2 and MCAD, the backend, the web UI and the MCP endpoint are all inside the image.
-- **Bring any model.** Claude, OpenAI, Gemini, OpenRouter, Ollama, LM Studio, vLLM and other OpenAI-compatible servers. Switch models per request.
+- **Bring any model.** Claude, OpenAI, Gemini, OpenRouter, xAI, Mistral, Groq, DeepSeek, Ollama, LM Studio, vLLM and other OpenAI-compatible servers. Switch models per request.
+- **Use your Claude plan.** Sign in with your Claude Pro, Max, Team or Enterprise plan instead of an API key. Buildplate runs Claude Code, Anthropic's own app, and you sign in through Claude Code's own login.
 - **Configure everything in the browser.** Add AI connections (several per provider if you like), pick models, change your printer profile and limits. Changes are live immediately; nothing restarts or rebuilds.
 - **A design loop that checks its own work.** The agent renders every draft, validates it (watertight, on the bed, inside your build volume) and, with vision-capable models, reviews a four-view preview before saving.
 - **Every major printer.** Pick yours from a catalog of 400+ printers from about 70 manufacturers, with the nozzle sizes you use, and switch the target printer from Studio. The plate, checks and design limits follow, including round beds for deltas.
