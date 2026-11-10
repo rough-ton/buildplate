@@ -46,11 +46,16 @@ Event types, in order of appearance:
 
 | Method and path | Description |
 | --- | --- |
-| `GET /api/designs?q=` | List designs |
-| `POST /api/designs` | Create from code: `{code, title}` |
+| `GET /api/designs` | Search designs. `q` is free text plus optional qualifiers (see [search syntax](using-studio.md#library-and-search)). Filters: `tags` (comma-separated, all required), `provider`, `model`, `source`, `printer`, `min_size`, `max_size` (largest dimension in mm), `after`, `before` (`YYYY-MM-DD`), `sort` (`relevance`, `updated`, `created`, `title`, `largest`, `smallest`), `limit`. Each design includes `tags` and the `models` that generated it |
+| `GET /api/designs/facets` | Tags, provider/model pairs, sources and printers present in the library, with design counts |
+| `POST /api/designs` | Create from code: `{code, title, tags?}` |
 | `GET /api/designs/{id}` | Design with versions, messages, latest code and parameters |
 | `PATCH /api/designs/{id}` | Rename: `{title}` |
 | `DELETE /api/designs/{id}` | Delete with all versions |
+| `GET /api/designs/{id}/tags` | The design's tags |
+| `PUT /api/designs/{id}/tags` | Replace tags: `{tags: [...]}`. Tags are lowercased, at most 30 per design |
+| `POST /api/designs/{id}/tags` | Add tags: `{tags: [...]}` |
+| `DELETE /api/designs/{id}/tags/{tag}` | Remove one tag |
 | `GET /api/designs/{id}/versions/{v}` | One version |
 | `POST /api/designs/{id}/versions` | Save code as a new version: `{code, summary?}` |
 | `GET /api/designs/{id}/download?format=stl\|3mf\|scad\|png&version=&params=` | Download; `params` is URL-encoded JSON of overrides |

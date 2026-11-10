@@ -1,4 +1,4 @@
-"""SQLite persistence for designs, versions, chat history and token usage."""
+"""SQLite persistence for designs, versions, tags, chat history and token usage."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import uuid
 from contextlib import contextmanager
 from typing import Any, Iterator
 
-from . import config
+from . import config, search
 
 _lock = threading.RLock()
 
@@ -73,6 +73,16 @@ CREATE TABLE IF NOT EXISTS run_steps (
     duration_ms INTEGER NOT NULL DEFAULT 0,
     tool_calls TEXT NOT NULL DEFAULT '[]'
 );
+CREATE TABLE IF NOT EXISTS design_tags (
+    design_id TEXT NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (design_id, tag)
+);
+CREATE INDEX IF NOT EXISTS idx_design_tags_tag ON design_tags(tag);
+CREATE VIRTUAL TABLE IF NOT EXISTS design_fts USING fts5(
+    design_id UNINDEXED, title, tags, summary, prompt, provider, model, printer, source,
+    tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
+);
 CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_versions_design ON versions(design_id, version);
 CREATE INDEX IF NOT EXISTS idx_messages_design ON messages(design_id, id);
@@ -90,12 +100,28 @@ def _connect() -> sqlite3.Connection:
 _conn: sqlite3.Connection | None = None
 
 
+# Bump when the search index layout or contents change; existing databases are
+# reindexed on the next start.
+INDEX_VERSION = 1
+
+# bm25 weights, in design_fts column order
+_FTS_WEIGHTS = "0, 10.0, 6.0, 3.0, 2.0, 1.0, 1.0, 1.0, 1.0"
+
+
 def init() -> None:
     global _conn
     config.ensure_dirs()
     _conn = _connect()
     _conn.executescript(SCHEMA)
-    _conn.commit()
+    with tx() as c:
+        if c.execute("PRAGMA user_version").fetchone()[0] < INDEX_VERSION:
+            c.execute("DELETE FROM design_fts")
+            ids = [r[0] for r in c.execute("SELECT id FROM designs")]
+            c.execute(f"PRAGMA user_version = {INDEX_VERSION}")
+        else:
+            ids = [r[0] for r in c.execute("SELECT id FROM designs WHERE id NOT IN (SELECT design_id FROM design_fts)")]
+        for did in ids:
+            _reindex(c, did)
 
 
 @contextmanager
@@ -114,6 +140,46 @@ def _rows(cur: sqlite3.Cursor) -> list[dict[str, Any]]:
     return [dict(r) for r in cur.fetchall()]
 
 
+# ---- search index ----------------------------------------------------------
+def _reindex(c: sqlite3.Connection, design_id: str) -> None:
+    """Rebuild one design's full-text row from its title, tags, every version's summary
+    and printer, and the prompt, provider and model of the runs that produced versions."""
+    c.execute("DELETE FROM design_fts WHERE design_id=?", (design_id,))
+    d = c.execute("SELECT title, source FROM designs WHERE id=?", (design_id,)).fetchone()
+    if d is None:
+        return
+    versions = c.execute(
+        "SELECT summary, json_extract(stats, '$.printer') AS printer, run_id FROM versions "
+        "WHERE design_id=? ORDER BY version DESC",
+        (design_id,),
+    ).fetchall()
+    runs = c.execute(
+        "SELECT prompt, provider, model FROM runs WHERE id IN "
+        "(SELECT run_id FROM versions WHERE design_id=? AND run_id IS NOT NULL) ORDER BY started_at",
+        (design_id,),
+    ).fetchall()
+    tags = [r[0] for r in c.execute("SELECT tag FROM design_tags WHERE design_id=? ORDER BY tag", (design_id,))]
+
+    def join(values) -> str:
+        return "\n".join(dict.fromkeys(v for v in values if v))
+
+    c.execute(
+        "INSERT INTO design_fts (design_id, title, tags, summary, prompt, provider, model, printer, source) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            design_id,
+            d["title"],
+            join(tags),
+            join(v["summary"] for v in versions),
+            join(r["prompt"] for r in runs),
+            join(r["provider"] for r in runs),
+            join(r["model"] for r in runs),
+            join(v["printer"] for v in versions),
+            d["source"],
+        ),
+    )
+
+
 # ---- designs ---------------------------------------------------------------
 def create_design(title: str, source: str = "studio") -> str:
     did = uuid.uuid4().hex[:12]
@@ -123,6 +189,7 @@ def create_design(title: str, source: str = "studio") -> str:
             "INSERT INTO designs (id, title, source, created_at, updated_at) VALUES (?,?,?,?,?)",
             (did, title[:120] or "Untitled", source, now, now),
         )
+        _reindex(c, did)
     return did
 
 
@@ -137,35 +204,165 @@ def add_version(design_id: str, scad: str, summary: str, stats: dict, run_id: st
             (design_id, v, scad, summary, json.dumps(stats), run_id, time.time()),
         )
         c.execute("UPDATE designs SET current_version=?, updated_at=? WHERE id=?", (v, time.time(), design_id))
+        _reindex(c, design_id)
     return v
 
 
 def rename_design(design_id: str, title: str) -> None:
     with tx() as c:
-        c.execute("UPDATE designs SET title=?, updated_at=? WHERE id=?", (title[:120], time.time(), design_id))
+        c.execute("UPDATE designs SET title=?, updated_at=? WHERE id=?", (title[:120] or "Untitled", time.time(), design_id))
+        _reindex(c, design_id)
 
 
 def delete_design(design_id: str) -> None:
     with tx() as c:
         c.execute("DELETE FROM designs WHERE id=?", (design_id,))
+        c.execute("DELETE FROM design_fts WHERE design_id=?", (design_id,))
 
 
-def list_designs(limit: int = 200, query: str = "") -> list[dict[str, Any]]:
+_SIZE_AXIS = {
+    0: "CAST(json_extract(v.stats, '$.size_mm[0]') AS REAL)",
+    1: "CAST(json_extract(v.stats, '$.size_mm[1]') AS REAL)",
+    2: "CAST(json_extract(v.stats, '$.size_mm[2]') AS REAL)",
+}
+_SIZE_AXIS[None] = f"max({_SIZE_AXIS[0]}, {_SIZE_AXIS[1]}, {_SIZE_AXIS[2]})"
+
+SORTS = {
+    "updated": "d.updated_at DESC",
+    "created": "d.created_at DESC",
+    "title": "d.title COLLATE NOCASE ASC, d.updated_at DESC",
+    "largest": f"{_SIZE_AXIS[None]} DESC NULLS LAST, d.updated_at DESC",
+    "smallest": f"{_SIZE_AXIS[None]} ASC NULLS LAST, d.updated_at DESC",
+}
+
+
+def _like(value: str) -> str:
+    return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
+def list_designs(
+    limit: int = 200, query: str = "", filters: search.Search | None = None, sort: str = ""
+) -> list[dict[str, Any]]:
+    """List designs matching a search string (see app.search) plus optional extra filters.
+    sort is one of SORTS or "relevance"; the default is relevance when there is free text,
+    otherwise most recently updated."""
+    spec = search.parse(query)
+    if filters:
+        for f in ("words", "phrases", "tags", "providers", "models", "sources", "printers", "sizes"):
+            getattr(spec, f).extend(x for x in getattr(filters, f) if x not in getattr(spec, f))
+        spec.after = filters.after if filters.after is not None else spec.after
+        spec.before = filters.before if filters.before is not None else spec.before
+    sort = sort or ("relevance" if spec.has_text else "updated")
+    if sort not in SORTS and sort != "relevance":
+        raise ValueError(f"Unknown sort {sort!r}, use one of: relevance, {', '.join(SORTS)}")
+
+    where: list[str] = []
+    args: list[Any] = []
+    sql = (
+        "SELECT d.*, v.summary, v.stats, "
+        "(SELECT json_group_array(tag) FROM (SELECT tag FROM design_tags WHERE design_id=d.id ORDER BY tag)) AS tags, "
+        "(SELECT json_group_array(json_object('provider', provider, 'model', model)) FROM "
+        " (SELECT DISTINCT r.provider, r.model FROM versions rv JOIN runs r ON r.id=rv.run_id "
+        "  WHERE rv.design_id=d.id ORDER BY r.provider, r.model)) AS models "
+        "FROM designs d LEFT JOIN versions v ON v.design_id=d.id AND v.version=d.current_version "
+    )
+    if spec.has_text:
+        sql += "JOIN design_fts f ON f.design_id=d.id "
+        where.append("design_fts MATCH ?")
+        args.append(spec.fts_query())
+    for tag in spec.tags:
+        where.append("EXISTS (SELECT 1 FROM design_tags t WHERE t.design_id=d.id AND t.tag=?)")
+        args.append(tag)
+    for col, values in (("provider", spec.providers), ("model", spec.models)):
+        for val in values:
+            where.append(
+                "EXISTS (SELECT 1 FROM versions rv JOIN runs r ON r.id=rv.run_id "
+                f"WHERE rv.design_id=d.id AND lower(r.{col}) LIKE ? ESCAPE '\\')"
+            )
+            args.append(_like(val))
+    if spec.sources:
+        where.append(f"d.source IN ({','.join('?' * len(spec.sources))})")
+        args += spec.sources
+    for val in spec.printers:
+        where.append("lower(json_extract(v.stats, '$.printer')) LIKE ? ESCAPE '\\'")
+        args.append(_like(val))
+    for sf in spec.sizes:
+        where.append(f"{_SIZE_AXIS[sf.axis]} {sf.op} ?")
+        args.append(sf.value)
+    if spec.after is not None:
+        where.append("d.created_at >= ?")
+        args.append(spec.after)
+    if spec.before is not None:
+        where.append("d.created_at < ?")
+        args.append(spec.before)
+    if where:
+        sql += "WHERE " + " AND ".join(where) + " "
+    if sort == "relevance" and spec.has_text:
+        sql += f"ORDER BY bm25(design_fts, {_FTS_WEIGHTS}), d.updated_at DESC "
+    else:
+        sql += f"ORDER BY {SORTS.get(sort, SORTS['updated'])} "
+    sql += "LIMIT ?"
+    args.append(limit)
     with tx() as c:
-        sql = (
-            "SELECT d.*, v.summary, v.stats FROM designs d "
-            "LEFT JOIN versions v ON v.design_id=d.id AND v.version=d.current_version "
-        )
-        args: list[Any] = []
-        if query:
-            sql += "WHERE d.title LIKE ? "
-            args.append(f"%{query}%")
-        sql += "ORDER BY d.updated_at DESC LIMIT ?"
-        args.append(limit)
         rows = _rows(c.execute(sql, args))
     for r in rows:
         r["stats"] = json.loads(r["stats"] or "{}")
+        r["tags"] = json.loads(r["tags"] or "[]")
+        r["models"] = json.loads(r["models"] or "[]")
     return rows
+
+
+def facets() -> dict[str, Any]:
+    """Values present in the library, with design counts, for building filter controls."""
+    with tx() as c:
+        tags = _rows(c.execute("SELECT tag, COUNT(*) AS count FROM design_tags GROUP BY tag ORDER BY count DESC, tag"))
+        models = _rows(
+            c.execute(
+                "SELECT r.provider, r.model, COUNT(DISTINCT v.design_id) AS count FROM versions v "
+                "JOIN runs r ON r.id=v.run_id GROUP BY r.provider, r.model ORDER BY r.provider, count DESC, r.model"
+            )
+        )
+        sources = _rows(c.execute("SELECT source, COUNT(*) AS count FROM designs GROUP BY source ORDER BY count DESC"))
+        printers = _rows(
+            c.execute(
+                "SELECT json_extract(v.stats, '$.printer') AS printer, COUNT(*) AS count FROM designs d "
+                "JOIN versions v ON v.design_id=d.id AND v.version=d.current_version "
+                "WHERE printer IS NOT NULL GROUP BY printer ORDER BY count DESC, printer"
+            )
+        )
+    return {"tags": tags, "models": models, "sources": sources, "printers": printers, "sorts": ["relevance", *SORTS]}
+
+
+# ---- tags --------------------------------------------------------------------
+MAX_TAGS = 30
+
+
+def get_tags(design_id: str) -> list[str]:
+    with tx() as c:
+        return [r[0] for r in c.execute("SELECT tag FROM design_tags WHERE design_id=? ORDER BY tag", (design_id,))]
+
+
+def set_tags(design_id: str, tags: list[str]) -> list[str]:
+    """Replace a design's tags. Tags are normalised (see search.normalize_tag) and deduplicated."""
+    clean = list(dict.fromkeys(t for t in (search.normalize_tag(x) for x in tags) if t))
+    if len(clean) > MAX_TAGS:
+        raise ValueError(f"A design can have at most {MAX_TAGS} tags")
+    with tx() as c:
+        if c.execute("SELECT 1 FROM designs WHERE id=?", (design_id,)).fetchone() is None:
+            raise KeyError(design_id)
+        c.execute("DELETE FROM design_tags WHERE design_id=?", (design_id,))
+        c.executemany("INSERT INTO design_tags (design_id, tag) VALUES (?,?)", [(design_id, t) for t in clean])
+        _reindex(c, design_id)
+    return sorted(clean)
+
+
+def add_tags(design_id: str, tags: list[str]) -> list[str]:
+    return set_tags(design_id, get_tags(design_id) + list(tags))
+
+
+def remove_tag(design_id: str, tag: str) -> list[str]:
+    t = search.normalize_tag(tag)
+    return set_tags(design_id, [x for x in get_tags(design_id) if x != t])
 
 
 def get_design(design_id: str) -> dict[str, Any] | None:
@@ -186,6 +383,7 @@ def get_design(design_id: str) -> dict[str, Any] | None:
                 (design_id,),
             )
         )
+        design["tags"] = [r[0] for r in c.execute("SELECT tag FROM design_tags WHERE design_id=? ORDER BY tag", (design_id,))]
     for v in design["versions"]:
         v["stats"] = json.loads(v["stats"] or "{}")
     return design
