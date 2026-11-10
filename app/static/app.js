@@ -1232,7 +1232,10 @@ function chart(daily, days) {
 }
 
 // ================================================================= SETTINGS
-async function Settings(root) {
+async function Settings(root, [flag] = []) {
+  // returning from a sign-in on another site
+  const oauthMsg = { "oauth-ok": ["Signed in. The connection is ready.", ""], "oauth-failed": ["The sign-in did not finish. Try again from the connection.", "bad"], "oauth-cancelled": ["Sign-in cancelled.", ""] }[flag];
+  if (oauthMsg) { history.replaceState(null, "", "#/settings"); setTimeout(() => toast(...oauthMsg), 300); }
   const st = structuredClone(await loadSettings());
   const sys = await api("/api/system");
   const page = h("div", { class: "page" });
@@ -1275,17 +1278,26 @@ async function Settings(root) {
   function methodForm(method, conn) {
     const inputs = {};
     const clear = new Set();
-    const rows = method.fields.map((f) => {
+    const rows = method.fields.filter((f) => f.type !== "hidden").map((f) => {
       const id = `cf-${f.name}-${++uid}`;
       const saved = conn?.secrets?.[f.name];
-      const input = h("input", {
-        id, autocomplete: "off",
-        type: f.type === "password" ? "password" : f.type === "url" ? "url" : "text",
-        value: f.secret ? "" : (conn?.fields?.[f.name] ?? f.default ?? ""),
-        placeholder: saved?.set ? `Saved ${saved.hint}. Enter a new one to replace it.` : f.placeholder || "",
-      });
+      const value = f.secret ? "" : (conn?.fields?.[f.name] ?? f.default ?? "");
+      const placeholder = saved?.set ? (f.type === "json" ? "Saved. Paste or load a new key to replace it." : `Saved ${saved.hint}. Enter a new one to replace it.`) : f.placeholder || "";
+      let input;
+      if (f.type === "select") {
+        input = h("select", { id }, ...f.options.map(([v, l]) => h("option", { value: v, selected: String(v) === String(value) }, l)));
+      } else if (f.type === "json") {
+        input = h("textarea", { id, rows: 5, class: "mono", spellcheck: "false", autocomplete: "off", placeholder: placeholder || "{ ... }" });
+      } else {
+        input = h("input", { id, autocomplete: "off", value, placeholder, type: f.type === "password" ? "password" : f.type === "url" ? "url" : "text" });
+      }
       inputs[f.name] = input;
       const extra = [];
+      if (f.type === "json") {
+        const file = h("input", { type: "file", accept: ".json,application/json", hidden: true });
+        file.addEventListener("change", async () => { if (file.files[0]) input.value = await file.files[0].text(); file.value = ""; });
+        extra.push(file, h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => file.click() }, "Load key file"));
+      }
       if (f.help && f.help.startsWith("http")) extra.push(h("a", { href: f.help, target: "_blank", rel: "noopener", class: "hint", style: "margin:0" }, "Get a key"));
       else if (f.help) extra.push(h("p", { class: "hint" }, f.help));
       if (saved?.set && !f.required) {
@@ -1293,13 +1305,14 @@ async function Settings(root) {
         btn.addEventListener("click", () => { clear.add(f.name); input.value = ""; input.placeholder = "Will be cleared when you save"; });
         extra.push(btn);
       }
-      return h("div", { class: f.type === "url" ? "full" : "" }, h("label", { for: id }, f.label), input, ...extra);
+      return h("div", { class: f.type === "url" || f.type === "json" ? "full" : "" }, h("label", { for: id }, f.label), input, ...extra);
     });
     return {
       el: h("div", { class: "conn-fields" }, ...rows),
       read() {
         const out = {};
         for (const f of method.fields) {
+          if (!inputs[f.name]) continue;
           const v = inputs[f.name].value.trim();
           if (!f.secret) out[f.name] = v;
           else if (v) out[f.name] = v;
@@ -1351,6 +1364,8 @@ async function Settings(root) {
         editable ? h("button", { class: "btn btn-sm btn-ghost", onclick: () => { editArea.hidden = !editArea.hidden; } }, "Edit") : null),
       h("div", { class: "conn-status" }, statusEl),
       isClaude && editable ? claudeActions(c, statusEl) : null,
+      method?.oauth && editable ? h("div", { class: "row conn-actions" }, h("button", { class: `btn btn-sm ${c.status?.state === "connected" ? "" : "btn-primary"}`, onclick: () => startOAuth(c.id) },
+        c.status?.state === "connected" ? "Sign in again" : "Sign in with OpenRouter")) : null,
       editArea);
     if (editable && method) {
       const labelIn = h("input", { type: "text", value: c.label, id: `cl-${c.id}`, maxlength: 60 });
@@ -1414,6 +1429,12 @@ async function Settings(root) {
     return row;
   }
 
+  // Send the browser to the provider's sign-in; it comes back to Settings.
+  async function startOAuth(cid) {
+    try { location.href = (await api(`/api/connections/${cid}/oauth/start`, { method: "POST" })).url; }
+    catch (err) { toast(err.message, "bad"); }
+  }
+
   function addConnectionForm() {
     const wrap = h("div", { class: "conn-add" });
     const methodSel = h("select", { id: "conn-method", "aria-label": "Connection type" }, h("option", { value: "" }, "Choose a provider and method"));
@@ -1427,7 +1448,7 @@ async function Settings(root) {
       if (!m) return;
       const labelIn = h("input", { type: "text", id: "conn-new-label", value: m.family_label, maxlength: 60 });
       const form = methodForm(m, null);
-      const go = h("button", { class: "btn btn-primary", disabled: m.requires_password && !connCtx.passwordSession }, m.kind === "cli_session" ? "Add and sign in" : "Connect");
+      const go = h("button", { class: "btn btn-primary", disabled: m.requires_password && !connCtx.passwordSession }, m.kind === "cli_session" ? "Add and sign in" : m.oauth ? "Sign in with OpenRouter" : "Connect");
       const status = h("span", { class: "hint", style: "margin:0" }, m.requires_password && !connCtx.passwordSession ? connCtx.passwordReason : "");
       go.addEventListener("click", async () => {
         go.disabled = true; status.textContent = "Saving"; status.style.color = "";
@@ -1435,6 +1456,7 @@ async function Settings(root) {
         try {
           created = await api("/api/connections", { method: "POST", json: { method: m.id, label: labelIn.value, values: form.read() } });
         } catch (err) { status.textContent = err.message; status.style.color = "var(--bad)"; go.disabled = false; return; }
+        if (m.oauth) { await startOAuth(created.id); return; }
         if (m.kind === "cli_session") {
           try {
             if (!connCtx.claudeCode.installed) await installClaudeCode(status);
@@ -1451,12 +1473,13 @@ async function Settings(root) {
         } catch (err) { toast(`Saved, but the test failed: ${err.message}`, "bad"); }
         await afterConnectionChange();
       });
-      detail.append(
+      detail.append(...[
         h("p", { class: "hint" }, m.description, " ", h("span", { class: "pill" }, m.billing_label)),
         m.compliance ? h("p", { class: "hint" }, m.compliance) : null,
+        m.probe ? h("p", { class: "hint" }, "Connecting sends one tiny test request (a few tokens) to check the credentials and a model work.") : null,
         h("div", { class: "conn-fields" }, h("div", {}, h("label", { for: labelIn.id }, "Name"), labelIn)),
         form.el,
-        h("div", { class: "row", style: "margin-top:10px" }, go, status));
+        h("div", { class: "row", style: "margin-top:10px" }, go, status)].filter(Boolean));
     });
     wrap.append(h("h3", {}, "Add a connection"), h("div", { class: "conn-fields" }, h("div", { class: "full" }, h("label", { for: "conn-method" }, "Provider"), methodSel)), detail);
     return wrap;

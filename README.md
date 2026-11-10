@@ -35,9 +35,10 @@ model, or your Claude plan.
 - **A design loop that checks its own work.** The agent renders every draft, validates it
   (watertight, on the bed, inside your build volume) and, with vision-capable models,
   reviews a four-view preview before saving.
-- **Bring any model.** Claude, OpenAI, Gemini, OpenRouter, xAI, Mistral, Groq, DeepSeek,
-  Ollama, LM Studio, vLLM and other OpenAI-compatible servers. Add several connections per
-  provider and switch models per request.
+- **Bring any model.** Claude, OpenAI, Gemini, OpenRouter (with one-click sign-in), xAI, Mistral,
+  Groq, DeepSeek, Ollama, LM Studio, vLLM and other OpenAI-compatible servers, or your own cloud
+  account on Amazon Bedrock, Google Vertex AI, Azure OpenAI or Microsoft Foundry. Add several
+  connections per provider and switch models per request.
 - **Use your Claude plan.** Design with your Claude Pro, Max, Team or Enterprise plan
   instead of an API key. Buildplate runs Claude Code, Anthropic's own app, and you sign in
   through Claude Code's own login; Buildplate never sees your Claude credentials.

@@ -84,6 +84,7 @@ Event types, in order of appearance:
 | `PATCH /api/connections/{id}` | Change `label`, `enabled` or `values`. A secret given as `""` is cleared; one left out is kept. Same access rule |
 | `DELETE /api/connections/{id}` | Remove a connection and its credentials. Same access rule |
 | `POST /api/connections/{id}/test` | Test, save and return the model list. For a Claude plan connection, asks Claude Code whether it is signed in. Same access rule |
+| `POST /api/connections/{id}/oauth/start` | Start Sign in with OpenRouter for a connection. Returns `{url}` to send the browser to; it comes back to `GET /api/oauth/openrouter/callback`. Same access rule as other connection changes |
 | `POST /api/connections/{id}/sign-out` | Sign a Claude plan connection out of Claude Code. Needs a password session |
 | `WS /api/connections/{id}/terminal?action=login\|logout` | Claude Code's own sign-in in a terminal. Needs a password session and a same-origin browser. Frames: `{type: "input"\|"resize"}` in; `{type: "output"\|"error"\|"exit"}` out |
 | `GET /api/claude-code` | Whether Claude Code is installed, its pinned version and install progress |
