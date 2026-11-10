@@ -282,6 +282,11 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
 .lib-info { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .lib-info h3 { margin: 0; font-size: 14.5px; font-weight: 600; }
 .lib-info .meta { color: var(--ink-3); font-size: 12.5px; }
+.made-by { display: flex; gap: 4px; min-width: 0; }
+.made-by-pill { min-width: 0; max-width: 100%; }
+.made-by-label { overflow: hidden; text-overflow: ellipsis; }
+.made-by-pill.agent { background: var(--panel); color: var(--ink-2); }
+.made-by-pill.manual, .made-by-pill.external { border-style: dashed; }
 .lib-toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .lib-search { height: 40px !important; font-size: 14.5px; }
 .lib-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

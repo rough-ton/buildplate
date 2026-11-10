@@ -74,7 +74,7 @@ The **Checks** tab shows the size, volume, an estimated PLA weight, whether the 
 
 ## History
 
-Every generation and every saved edit is a version. Open one from the **History** tab to load its code and model. Saving after that creates a new version; nothing is overwritten.
+Every generation and every saved edit is a version. Each version shows what made it: the provider and model for AI generations, **Manual edit** for code you saved yourself, or the MCP client and model for designs saved from an external app. Open one from the **History** tab to load its code and model. Saving after that creates a new version; nothing is overwritten.
 
 ## Tags
 
@@ -83,6 +83,8 @@ Tags sit under the design title. Type a tag and press Enter (or a comma) to add 
 ## Library and search
 
 The Library search box matches words anywhere in a design: its title, version descriptions, tags, the prompts that produced it, the AI provider and model, and the printer. Words match from their start, so `brack` finds "bracket". Put a phrase in double quotes to match it exactly. With search text, the best matches come first.
+
+Each card shows the provider and model behind the current version. Hover it for the request's tokens and cost; a **+N** badge means earlier versions used other models.
 
 The filters under the search box narrow results by source, model, tag and size, and the sort menu changes the order. Active filters appear as chips you can remove. Select a tag on a card to filter by it.
 
