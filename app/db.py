@@ -141,6 +141,8 @@ _ADDED_COLUMNS = {
     "versions": {"bom": "TEXT", "hardware_mode": "TEXT", "hardware_note": "TEXT", "built": "TEXT",
                  # parameter values tuned in Studio (JSON {name: value}), kept with the version
                  "param_values": "TEXT"},
+    # a reference file attached to a Studio request (JSON {id, name, kind, summary, ...})
+    "messages": {"reference": "TEXT"},
 }
 
 # Bump when the search index layout or contents change; existing databases are
@@ -557,10 +559,12 @@ def get_design(design_id: str) -> dict[str, Any] | None:
         )
         design["messages"] = _rows(
             c.execute(
-                "SELECT role, content, run_id, created_at FROM messages WHERE design_id=? ORDER BY id",
+                "SELECT role, content, run_id, created_at, reference FROM messages WHERE design_id=? ORDER BY id",
                 (design_id,),
             )
         )
+        for m in design["messages"]:
+            m["reference"] = json.loads(m["reference"]) if m["reference"] else None
         design["tags"] = [r[0] for r in c.execute("SELECT tag FROM design_tags WHERE design_id=? ORDER BY tag", (design_id,))]
     for v in design["versions"]:
         v["stats"] = json.loads(v["stats"] or "{}")
@@ -587,11 +591,12 @@ def get_version(design_id: str, version: int | None = None) -> dict[str, Any] | 
     return out
 
 
-def add_message(design_id: str, role: str, content: str, run_id: str | None = None) -> None:
+def add_message(design_id: str, role: str, content: str, run_id: str | None = None,
+                reference: dict[str, Any] | None = None) -> None:
     with tx() as c:
         c.execute(
-            "INSERT INTO messages (design_id, role, content, run_id, created_at) VALUES (?,?,?,?,?)",
-            (design_id, role, content, run_id, time.time()),
+            "INSERT INTO messages (design_id, role, content, run_id, created_at, reference) VALUES (?,?,?,?,?,?)",
+            (design_id, role, content, run_id, time.time(), json.dumps(reference) if reference else None),
         )
 
 

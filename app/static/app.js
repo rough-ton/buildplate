@@ -74,7 +74,21 @@ const icons = {
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14 M5 12h14"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>',
   save: '<svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z M8 4v5h7V4 M8 20v-6h8v6"/></svg>',
+  attach: '<svg viewBox="0 0 24 24"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>',
 };
+
+// Reference files a Studio request can carry (see app/reference.py).
+const REFERENCE_ACCEPT = ".png,.jpg,.jpeg,.webp,.stl,.3mf,.scad,.gcode,.gco,.g";
+
+// A reference file as shown in the composer and in the user's chat bubble.
+function referenceCard(ref, onRemove = null) {
+  return h("div", { class: "ref-card", title: ref.summary || "" },
+    ref.image_url ? h("img", { src: ref.image_url, alt: `Reference: ${ref.name}`, loading: "lazy" }) : h("span", { class: "ref-icon", html: icons.attach }),
+    h("div", { class: "ref-text" },
+      h("div", { class: "ref-name" }, ref.name),
+      h("div", { class: "ref-sum" }, ref.uploading ? "Uploading..." : `${ref.kind_label}. ${ref.summary || ""}`)),
+    onRemove ? h("button", { class: "ref-remove", type: "button", "aria-label": `Remove ${ref.name}`, title: "Remove", onclick: onRemove }, "\u00d7") : null);
+}
 
 // ---------------------------------------------------------------- global state
 const app = { settings: null, cleanup: null };
@@ -209,6 +223,7 @@ async function Studio(root, [designId]) {
     sessionTokens: { input: 0, output: 0, cost: 0 },
     tab: "params",
     bom: null,
+    ref: null, // reference file attached to the next request
   };
 
   const settings = app.settings;
@@ -224,6 +239,9 @@ async function Studio(root, [designId]) {
   const prompt = h("textarea", { placeholder: "Describe a part, or ask for a change to the current one", rows: 3, "aria-label": "Design request" });
   const picker = modelSelect({ "aria-label": "Model for this request" });
   const sendBtn = h("button", { class: "btn btn-primary", html: icons.send + "Generate" });
+  const fileInput = h("input", { type: "file", accept: REFERENCE_ACCEPT, hidden: true });
+  const attachBtn = h("button", { class: "btn btn-ghost btn-sm", type: "button", html: icons.attach, title: "Attach a reference: a picture, STL, 3MF, SCAD or G-code file", "aria-label": "Attach a reference file" });
+  const refSlot = h("div", { class: "ref-slot", hidden: true });
   const sessionMeter = h("span", { class: "hint tabular", style: "margin:0" });
   // How to handle screws, inserts, magnets and other hardware for the next request.
   const hwSel = h("select", { class: "hw-select", "aria-label": "Hardware for this request", title: "How to handle screws, inserts, magnets and other hardware" },
@@ -245,8 +263,8 @@ async function Studio(root, [designId]) {
     h("div", { class: "pane-head" }, titleInput, h("span", { class: "spacer" }), newBtn),
     tags.el,
     chat,
-    h("div", { class: "composer" }, prompt,
-      h("div", { class: "composer-foot" }, picker, h("span", { class: "spacer" }), sendBtn),
+    h("div", { class: "composer" }, refSlot, prompt, fileInput,
+      h("div", { class: "composer-foot" }, picker, attachBtn, h("span", { class: "spacer" }), sendBtn),
       h("div", { class: "row composer-meta" }, hwSel, planNote, h("span", { class: "spacer" }), sessionMeter)));
 
   // ---- center: stage
@@ -686,11 +704,44 @@ async function Studio(root, [designId]) {
       ...starters.map((t) => h("button", { class: "starter", onclick: () => { prompt.value = t; prompt.focus(); } }, t))));
   }
 
-  function addUser(text) {
+  function addUser(text, ref = null) {
     chat.querySelector(".chat-intro")?.remove();
-    chat.append(h("div", { class: "msg msg-user" }, text));
+    chat.append(h("div", { class: "msg msg-user" }, ref ? referenceCard(ref) : null, text));
     chat.scrollTop = chat.scrollHeight;
   }
+
+  // ---- reference file for the next request
+  function showRef() {
+    refSlot.hidden = !s.ref;
+    refSlot.replaceChildren(s.ref ? referenceCard(s.ref, () => { s.ref = null; showRef(); }) : "");
+  }
+  async function attach(file) {
+    if (!file || s.running) return;
+    s.ref = { name: file.name, uploading: true };
+    showRef();
+    try {
+      const ref = await api(`/api/references?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file, headers: { "content-type": "application/octet-stream" } });
+      if (s.ref?.uploading && s.ref.name === file.name) s.ref = ref;
+    } catch (err) {
+      toast(err.message, "bad");
+      s.ref = null;
+    }
+    showRef();
+  }
+  attachBtn.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => { attach(fileInput.files[0]); fileInput.value = ""; });
+  const composerEl = prompt.parentElement;
+  composerEl.addEventListener("dragover", (e) => { if (e.dataTransfer?.types.includes("Files")) { e.preventDefault(); composerEl.classList.add("drop"); } });
+  composerEl.addEventListener("dragleave", () => composerEl.classList.remove("drop"));
+  composerEl.addEventListener("drop", (e) => {
+    composerEl.classList.remove("drop");
+    const f = e.dataTransfer?.files?.[0];
+    if (f) { e.preventDefault(); attach(f); }
+  });
+  prompt.addEventListener("paste", (e) => {
+    const f = [...(e.clipboardData?.files || [])].find((x) => x.type.startsWith("image/"));
+    if (f) { e.preventDefault(); attach(new File([f], f.name || "pasted-image.png", { type: f.type })); }
+  });
 
   function addAI(text, meta) {
     const body = h("div", { class: "body" }, text);
@@ -718,25 +769,29 @@ async function Studio(root, [designId]) {
   }
 
   // Show the hardware question as choices; picking one re-sends the request with it.
-  function askHardware(msgEl, ev, text) {
+  function askHardware(msgEl, ev, text, ref) {
     const box = h("div", { class: "question" }, h("p", {}, ev.message));
     for (const o of ev.options) {
       box.append(h("button", { class: "q-option", disabled: !!o.disabled, onclick: () => {
         hwSel.value = o.value;
         box.replaceChildren(h("p", { class: "hint", style: "margin:0" }, `${o.label}.`));
-        generate(text, true);
+        generate(text, true, ref);
       } }, h("strong", {}, o.label), h("span", {}, o.detail)));
     }
     msgEl.querySelector(".body").replaceWith(box);
   }
 
-  async function generate(resend = null, isResend = false) {
+  async function generate(resend = null, isResend = false, resendRef = null) {
     const text = isResend ? resend : prompt.value.trim();
     if (!text || s.running) return;
+    if (!isResend && s.ref?.uploading) { toast("Wait for the reference file to finish uploading."); return; }
     const [connection, model] = (picker.value || "").split("::");
     if (!connection) { toast("Add an AI connection and pick a model in Settings first.", "bad"); return; }
-    if (!isResend) addUser(text);
+    const ref = isResend ? resendRef : s.ref;
+    if (!isResend) addUser(text, ref);
     prompt.value = "";
+    s.ref = null;
+    showRef();
     s.running = true;
     sendBtn.innerHTML = icons.stop + "Stop";
     const trace = h("div", { class: "trace" });
@@ -750,7 +805,7 @@ async function Studio(root, [designId]) {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, design_id: s.designId, code: codeForAI(), connection, model, hardware_mode: hwSel.value }),
+        body: JSON.stringify({ prompt: text, design_id: s.designId, code: codeForAI(), connection, model, hardware_mode: hwSel.value, reference: ref?.id || null }),
         signal: s.abort.signal,
       });
       if (res.status === 401) { showLogin(); return; }
@@ -769,7 +824,9 @@ async function Studio(root, [designId]) {
           if (ev.type === "status") status.lastChild.textContent = ev.message;
           else if (ev.type === "assistant") body.textContent = ev.text;
           else if (ev.type === "tool") trace.append(h("div", {}, ev.name === "submit_design" ? "Saving design" : ev.name === "list_parts" ? "Looking up parts" : "Checking design"));
-          else if (ev.type === "question") askHardware(msgEl, ev, text);
+          else if (ev.type === "question") askHardware(msgEl, ev, text, ref);
+          else if (ev.type === "reference") trace.append(h("div", {}, `Using reference ${ev.reference.name}${ev.image_sent ? " (with image)" : ""}`));
+          else if (ev.type === "notice") trace.append(h("div", {}, ev.message));
           else if (ev.type === "check") trace.append(h("div", { class: ev.ok ? "ok" : "fail" }, ev.ok ? `Rendered: ${ev.stats.size_mm.join(" x ")} mm${ev.stats.issues.length ? `, ${ev.stats.issues.length} issue(s)` : ""}` : `Render failed: ${ev.error}`));
           else if (ev.type === "code") { setCode(ev.code); }
           else if (ev.type === "preview") { s.preview = ev.image; }
@@ -789,6 +846,11 @@ async function Studio(root, [designId]) {
             if (ev.bom?.some((p) => p.to_buy)) msgEl.append(h("p", { class: "hint" }, `This design needs parts you don't have. `, h("a", { href: "#", onclick: (e) => { e.preventDefault(); s.tab = "parts"; renderTab(); } }, "See the parts list")));
           } else if (ev.type === "error") {
             totals = ev.totals || totals;
+            if (ev.kind === "reference" && ref) {
+              // nothing was sent: give the request and its attachment back to try another model
+              if (!prompt.value.trim()) prompt.value = text;
+              if (!s.ref) { s.ref = ref; showRef(); }
+            }
             msgEl.append(h("div", { class: "err-box" }, ev.message,
               ev.manage_url ? h("div", { style: "margin-top:8px" }, h("a", { class: "btn btn-sm btn-primary", href: ev.manage_url, target: "_blank", rel: "noopener noreferrer" }, "Manage usage")) : null));
           }
@@ -847,7 +909,7 @@ async function Studio(root, [designId]) {
       const runs = d.messages.length ? (await api("/api/usage/runs?limit=500")).runs.filter((r) => r.design_id === s.designId) : [];
       const byRun = Object.fromEntries(runs.map((r) => [r.id, r]));
       for (const m of d.messages) {
-        if (m.role === "user") addUser(m.content);
+        if (m.role === "user") addUser(m.content, m.reference);
         else {
           const r = byRun[m.run_id];
           addAI(m.content, r ? usagePills({ ...r, cost_known: !!r.cost_known }, r.iterations) : null);
