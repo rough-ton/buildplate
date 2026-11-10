@@ -49,6 +49,11 @@ TOOLS = [
                         "type": "string",
                         "description": "One to three sentences for the user: what was built and the key parameters.",
                     },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "2 to 5 short lowercase library tags, e.g. what the part is for and its type: bracket, garage, cable management.",
+                    },
                 },
                 "required": ["code", "title", "summary"],
             },
@@ -85,7 +90,7 @@ def system_prompt(vision: bool) -> str:
         "1. Write the complete code and call check_design.",
         "2. Read the validation report" + (" and look carefully at the preview image" if vision else "") + ".",
         "3. Fix any errors, warnings or geometry that does not match the request, then check again.",
-        "4. When it is correct, call submit_design with the final code, a short title and a brief summary.",
+        "4. When it is correct, call submit_design with the final code, a short title, a brief summary and a few tags.",
         "Keep prose to a minimum; spend effort on getting the geometry right.",
     ]
     extra = s["agent"]["extra_instructions"].strip()
@@ -261,7 +266,7 @@ async def run(
                 if check["ok"]:
                     last_good = {"code": code, "stats": check["stats"]}
                 if name == "submit_design" and check["ok"]:
-                    final = {"code": code, "title": args.get("title", ""), "summary": args.get("summary", "")}
+                    final = {"code": code, "title": args.get("title", ""), "summary": args.get("summary", ""), "tags": args.get("tags") or []}
                     messages.append({"role": "tool", "tool_call_id": c.id, "content": "Saved."})
                     break
                 if name == "submit_design":
@@ -288,6 +293,11 @@ async def run(
         elif final.get("title") and db.get_design(design_id) and db.get_design(design_id)["title"] == "Untitled":
             db.rename_design(design_id, title)
         version = db.add_version(design_id, final["code"], final.get("summary", ""), stats, run_id)
+        tags = db.get_tags(design_id)
+        suggested = final.get("tags")
+        if not tags and isinstance(suggested, list):
+            # only tag untagged designs, so the agent never overrides tags the user chose
+            tags = db.set_tags(design_id, [str(t) for t in suggested[:5]])
         db.add_message(design_id, "user", prompt, run_id)
         db.add_message(design_id, "assistant", final.get("summary") or "Updated the design.", run_id)
         db.finish_run(run_id, "ok", design_id=design_id)
@@ -299,6 +309,7 @@ async def run(
             "title": title,
             "code": final["code"],
             "summary": final.get("summary", ""),
+            "tags": tags,
             "stats": stats,
             "params": openscad.parse_parameters(final["code"]),
             "totals": totals,

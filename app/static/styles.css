@@ -145,7 +145,7 @@ code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
 .btn-sm { height: 28px; padding: 0 10px; font-size: 13px; }
 .btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-input[type=text], input[type=password], input[type=number], input[type=url], select, textarea {
+input[type=text], input[type=search], input[type=password], input[type=number], input[type=url], select, textarea {
   width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
   background: var(--panel); transition: border-color .12s;
 }
@@ -283,6 +283,37 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
 .lib-info { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .lib-info h3 { margin: 0; font-size: 14.5px; font-weight: 600; }
 .lib-info .meta { color: var(--ink-3); font-size: 12.5px; }
+.made-by { display: flex; gap: 4px; min-width: 0; }
+.made-by-pill { min-width: 0; max-width: 100%; }
+.made-by-label { overflow: hidden; text-overflow: ellipsis; }
+.made-by-pill.agent { background: var(--panel); color: var(--ink-2); }
+.made-by-pill.manual, .made-by-pill.external { border-style: dashed; }
+.lib-toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.lib-search { height: 40px !important; font-size: 14.5px; }
+.lib-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.lib-filters select { width: auto; max-width: 220px; height: 32px; font-size: 13px; }
+.lib-size { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 13px; }
+.lib-size input { width: 72px; height: 32px; font-size: 13px; }
+.lib-status { margin-bottom: 16px; min-height: 28px; align-items: flex-start; }
+.lib-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lib-help { position: relative; font-size: 12.5px; color: var(--ink-2); }
+.lib-help summary { cursor: pointer; color: var(--ink-3); list-style: none; padding: 4px 0; }
+.lib-help summary::-webkit-details-marker { display: none; }
+.lib-help[open] > div { position: absolute; right: 0; top: 26px; z-index: 5; width: min(420px, calc(100vw - 48px)); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px 14px; }
+.lib-help code { font-family: var(--mono); font-size: 12px; background: var(--sunken); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+
+/* ---------- tags ---------- */
+.tag-list { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.tag { display: inline-flex; align-items: center; gap: 2px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: var(--accent-soft); color: var(--ink); border: 1px solid transparent; white-space: nowrap; }
+.tag-link { cursor: pointer; font-family: inherit; }
+.tag-link:hover, .tag-link.on { border-color: var(--accent); }
+.tag-filter { background: var(--sunken); border-color: var(--line); height: 26px; padding-right: 4px; }
+.tag-x { border: 0; background: transparent; color: var(--ink-3); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; border-radius: 50%; }
+.tag-x:hover { color: var(--bad); }
+.tag-editor { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.tag-editor .tag { padding-right: 2px; }
+.tag-input { width: auto !important; flex: 1; min-width: 90px; height: 24px !important; font-size: 12.5px; border-color: transparent !important; background: transparent !important; padding: 0 4px !important; }
+.tag-input:focus { border-color: var(--line-strong) !important; background: var(--panel) !important; box-shadow: none !important; }
 
 /* ---------- usage ---------- */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
