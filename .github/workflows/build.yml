@@ -2,8 +2,12 @@ name: Build and publish
 
 # Tests every push and pull request, and publishes the container image to
 # GitHub Container Registry:
-#   push to main  -> :edge and :sha-<short>
-#   tag vX.Y.Z    -> :X.Y.Z, :X.Y and :latest
+#   push to main  -> test, build, smoke test, then push :edge and :sha-<short>
+#   tag vX.Y.Z    -> no rebuild: promote the :sha-<short> image main already tested
+#                    to :X.Y.Z, :X.Y and :latest
+# A release adds one tiny layer to the tested image that only sets the version
+# (BUILDPLATE_VERSION and the OCI version label); every application layer is
+# byte-for-byte the image that passed CI on main.
 # Uses GitHub-hosted runners (pinned to Ubuntu 24.04), which are free and unlimited for public repositories.
 
 on:
@@ -26,6 +30,7 @@ concurrency:
 
 jobs:
   test:
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -43,7 +48,7 @@ jobs:
 
   image:
     needs: test
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref_type != 'tag'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -60,21 +65,21 @@ jobs:
           tags: |
             type=edge,branch=main
             type=sha,format=short
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+      # Build into the local Docker engine first, so nothing is published until the
+      # smoke test passes: a :sha-<short> image always means "tested and working".
       - uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64
-          push: true
+          load: true
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ github.ref_type == 'tag' && github.ref_name || format('edge-{0}', github.sha) }}
+            VERSION=edge-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Smoke test the published image
+      - name: Smoke test the image
         run: |
           # Run as an unprivileged user, the way Unraid (99:100) and most installs do.
           docker run -d --name smoke -p 8080:8080 -e PUID=99 -e PGID=100 ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
@@ -88,3 +93,47 @@ jobs:
       - name: Container logs
         if: failure()
         run: docker logs smoke || true
+      - name: Push
+        run: |
+          for tag in $(echo '${{ steps.meta.outputs.tags }}'); do docker push "$tag"; done
+
+  release:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: src
+        name: Find the image main tested for this commit
+        run: |
+          src="${IMAGE}:sha-${GITHUB_SHA::7}"
+          version="${GITHUB_REF_NAME#v}"
+          if ! docker buildx imagetools inspect "$src" >/dev/null 2>&1; then
+            echo "::error::No tested image $src. Tag a commit that has passed the 'Build and publish' run on main, then push the tag again."
+            exit 1
+          fi
+          echo "image=$src" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
+      - name: Stamp the version onto the tested image
+        run: |
+          mkdir -p /tmp/release && cd /tmp/release
+          printf 'FROM %s\nARG VERSION\nENV BUILDPLATE_VERSION=${VERSION}\nLABEL org.opencontainers.image.version="${VERSION}"\n' \
+            "${{ steps.src.outputs.image }}" > Dockerfile
+          docker buildx build --platform linux/amd64 --load --build-arg VERSION=${{ steps.src.outputs.version }} \
+            -t "${IMAGE}:${{ steps.src.outputs.version }}" -t "${IMAGE}:${{ steps.src.outputs.minor }}" -t "${IMAGE}:latest" .
+      - name: Check the release image reports its version
+        run: |
+          docker run -d --name smoke -p 8080:8080 -e PUID=99 -e PGID=100 "${IMAGE}:${{ steps.src.outputs.version }}"
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/api/health >/dev/null && break; sleep 2; done
+          curl -fsS http://127.0.0.1:8080/api/system | python3 -c "import json,sys; v=json.load(sys.stdin)['version']; print(v); assert v == '${{ steps.src.outputs.version }}', v"
+      - name: Container logs
+        if: failure()
+        run: docker logs smoke || true
+      - name: Push
+        run: |
+          for tag in "${{ steps.src.outputs.version }}" "${{ steps.src.outputs.minor }}" latest; do docker push "${IMAGE}:${tag}"; done
