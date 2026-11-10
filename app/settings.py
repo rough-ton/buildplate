@@ -318,6 +318,33 @@ class SettingsStore:
                 seed(method_id, f"c_env_{method_id.split('.')[0]}", {}, {"api_key": os.environ[var]})
         if os.environ.get("OLLAMA_BASE_URL"):
             seed("ollama.local", "c_env_ollama", {"base_url": os.environ["OLLAMA_BASE_URL"]}, {})
+        # Cloud accounts, from the variables each cloud's own tools use
+        env = os.environ
+        aws_region = env.get("AWS_REGION") or env.get("AWS_DEFAULT_REGION") or "us-east-1"
+        if env.get("AWS_BEARER_TOKEN_BEDROCK"):
+            seed("bedrock.api_key", "c_env_bedrock_key", {"region": aws_region}, {"api_key": env["AWS_BEARER_TOKEN_BEDROCK"]})
+        elif env.get("AWS_ACCESS_KEY_ID") and env.get("AWS_SECRET_ACCESS_KEY"):
+            secrets_ = {"access_key_id": env["AWS_ACCESS_KEY_ID"], "secret_access_key": env["AWS_SECRET_ACCESS_KEY"]}
+            if env.get("AWS_SESSION_TOKEN"):
+                secrets_["session_token"] = env["AWS_SESSION_TOKEN"]
+            seed("bedrock.iam", "c_env_bedrock", {"region": aws_region}, secrets_)
+        creds_file = env.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if creds_file and os.path.isfile(creds_file):
+            try:
+                creds = open(creds_file).read()
+                project = env.get("GOOGLE_CLOUD_PROJECT") or env.get("VERTEXAI_PROJECT") or json.loads(creds).get("project_id", "")
+                seed("vertex.service_account", "c_env_vertex",
+                     {"project": project, "location": env.get("VERTEXAI_LOCATION") or env.get("GOOGLE_CLOUD_LOCATION") or "us-central1"},
+                     {"credentials_json": creds})
+            except (OSError, ValueError):
+                pass
+        if env.get("AZURE_OPENAI_ENDPOINT") and (env.get("AZURE_OPENAI_API_KEY") or env.get("AZURE_CLIENT_SECRET")):
+            fields = {"endpoint": env["AZURE_OPENAI_ENDPOINT"], "deployments": env.get("AZURE_OPENAI_DEPLOYMENTS", ""),
+                      "api_version": env.get("AZURE_OPENAI_API_VERSION") or env.get("OPENAI_API_VERSION") or "2024-10-21"}
+            secrets_ = {"api_key": env["AZURE_OPENAI_API_KEY"]} if env.get("AZURE_OPENAI_API_KEY") else {"client_secret": env["AZURE_CLIENT_SECRET"]}
+            if not env.get("AZURE_OPENAI_API_KEY"):
+                fields |= {"tenant_id": env.get("AZURE_TENANT_ID", ""), "client_id": env.get("AZURE_CLIENT_ID", "")}
+            seed("azure.openai", "c_env_azure", fields, secrets_)
         if os.environ.get("BUILDPLATE_ADMIN_PASSWORD") and not s["security"]["ui_password_hash"]:
             s["security"]["ui_password_hash"] = hash_password(os.environ["BUILDPLATE_ADMIN_PASSWORD"])
             changed = True

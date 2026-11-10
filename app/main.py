@@ -16,7 +16,7 @@ from typing import Any
 import asyncio
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
@@ -317,6 +317,38 @@ async def claude_code_install(request: Request):
         claude_code.INSTALL.update(running=True, error="", done=0, total=0)
         _install_task = asyncio.create_task(go())
     return claude_code.info()
+
+
+@app.post("/api/connections/{cid}/oauth/start")
+async def oauth_start(cid: str, request: Request):
+    """Start a sign-in that fills the connection's credentials (Sign in with
+    OpenRouter). Returns the URL to send the browser to."""
+    _admin(request, cid=cid)
+    method = auth_methods.METHODS.get(connections.get(cid)["method"])
+    if not method or method.oauth != "openrouter":
+        raise HTTPException(400, "This connection does not sign in.")
+    from . import cloud
+
+    public = store.get()["server"]["public_url"].rstrip("/")
+    base = public or str(request.base_url).rstrip("/")
+    return {"url": cloud.openrouter_start(cid, f"{base}/api/oauth/openrouter/callback")}
+
+
+@app.get("/api/oauth/openrouter/callback")
+async def oauth_openrouter_callback(request: Request, state: str = "", code: str = ""):
+    """OpenRouter sends the browser back here with a code. Exchange it for the key,
+    save it on the connection, test it, and return to Settings."""
+    from . import cloud
+
+    if not code:
+        return RedirectResponse("/#/settings/oauth-cancelled", status_code=303)
+    try:
+        cid, key = await cloud.openrouter_finish(state, code)
+        connections.update(cid, data={"api_key": key})
+        await connections.test(cid)
+    except (auth_methods.MethodError, KeyError):
+        return RedirectResponse("/#/settings/oauth-failed", status_code=303)
+    return RedirectResponse("/#/settings/oauth-ok", status_code=303)
 
 
 @app.post("/api/connections/{cid}/sign-out")

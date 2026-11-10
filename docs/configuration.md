@@ -95,6 +95,10 @@ Per-model prices in US dollars per million input and output tokens, keyed `provi
 | `GEMINI_API_KEY` | none | Adds a Gemini API key connection |
 | `OPENROUTER_API_KEY` | none | Adds an OpenRouter API key connection |
 | `XAI_API_KEY`, `MISTRAL_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY` | none | Add a connection for that provider |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | none | Add an Amazon Bedrock connection with IAM credentials |
+| `AWS_BEARER_TOKEN_BEDROCK` (with `AWS_REGION`) | none | Add an Amazon Bedrock connection with a Bedrock API key |
+| `GOOGLE_APPLICATION_CREDENTIALS` (with optional `GOOGLE_CLOUD_PROJECT`, `VERTEXAI_LOCATION`) | none | Add a Vertex AI connection from the service account key file at that path |
+| `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENTS` | none | Add an Azure OpenAI connection. Use `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` instead of the key for a service principal |
 | `OLLAMA_BASE_URL` | none | Adds an Ollama connection |
 | `BUILDPLATE_CLAUDE_CODE_VERSION` | `2.1.311` | Claude Code version installed for Claude plan connections |
 | `BUILDPLATE_CLAUDE_BIN` | none | Use this Claude Code binary instead of installing one (for example one you installed yourself) |
