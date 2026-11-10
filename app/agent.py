@@ -14,9 +14,42 @@ import re
 import time
 from typing import Any, AsyncIterator
 
-from . import connections, db, openscad, providers
+from . import connections, db, openscad, parts, providers
 from .auth_methods import MethodError
 from .settings import store
+
+PARTS_SCHEMA = {
+    "type": "array",
+    "description": "Every hardware part the design uses (screws, inserts, nuts, magnets, bearings...). Empty if none.",
+    "items": {
+        "type": "object",
+        "properties": {
+            "part": {"type": "string", "description": "The part's id (p_...) or catalog key from the inventory or list_parts, or a plain name if it is not listed."},
+            "quantity": {"type": "integer", "minimum": 1},
+            "use": {"type": "string", "description": "What it is for, e.g. 'wall mounting screws'."},
+        },
+        "required": ["part", "quantity"],
+    },
+}
+
+LIST_PARTS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "list_parts",
+        "description": (
+            "Search the user's parts inventory and the hardware catalog (screws, heat-set inserts, nuts, washers, "
+            "magnets, bearings, standoffs...). Returns each part's id or key, quantity on hand, and the hole, pocket "
+            "and nut-trap sizes to model it with."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Words to match, e.g. 'M3 insert' or '608'."},
+                "category": {"type": "string", "description": "Optional category, e.g. screw, heat-set insert, magnet, bearing."},
+            },
+        },
+    },
+}
 
 TOOLS = [
     {
@@ -54,6 +87,11 @@ TOOLS = [
                         "items": {"type": "string"},
                         "description": "2 to 5 short lowercase library tags, e.g. what the part is for and its type: bracket, garage, cable management.",
                     },
+                    "parts": PARTS_SCHEMA,
+                    "hardware_note": {
+                        "type": "string",
+                        "description": "Only when hardware was asked to be avoided but is unavoidable: one sentence on why.",
+                    },
                 },
                 "required": ["code", "title", "summary"],
             },
@@ -62,7 +100,7 @@ TOOLS = [
 ]
 
 
-def system_prompt(vision: bool) -> str:
+def system_prompt(vision: bool, hardware_mode: str | None = None) -> str:
     s = store.get()
     p = s["printer"]
     libs = ", ".join(lib["name"] for lib in openscad.list_libraries()) or "none"
@@ -93,6 +131,8 @@ def system_prompt(vision: bool) -> str:
         "4. When it is correct, call submit_design with the final code, a short title, a brief summary and a few tags.",
         "Keep prose to a minimum; spend effort on getting the geometry right.",
     ]
+    if hardware_mode:
+        lines += ["", parts.mode_instructions(hardware_mode)]
     extra = s["agent"]["extra_instructions"].strip()
     if extra:
         lines += ["", "Additional instructions from the user:", extra]
@@ -154,6 +194,7 @@ async def run(
     model: str | None = None,
     source: str = "studio",
     provider: str | None = None,
+    hardware_mode: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Run the design loop. connection and model default to the design agent's
     settings; provider (a provider family) is the pre-connections way to choose and
@@ -168,6 +209,14 @@ async def run(
     provider = method.family
 
     a = store.get()["agent"]
+    mode = hardware_mode if hardware_mode in parts.MODES else a.get("hardware_mode", "ask")
+    if mode == "ask":
+        # a follow-up keeps the choice made for this design; otherwise ask, before any
+        # model call, when the request clearly needs hardware
+        mode = db.latest_hardware_mode(design_id) or "ask"
+        if mode == "ask" and parts.needs_hardware(prompt):
+            yield hardware_question()
+            return
     vision = providers.supports_vision(method, model)
     run_id = db.start_run(design_id, prompt, provider, model, source, target.id, method.id, method.billing)
     yield {
@@ -186,11 +235,11 @@ async def run(
             from . import claude_runtime
 
             loop = claude_runtime.design_loop(
-                target.id, run_id, model, system_prompt(vision), _prompt_text(design_id, current_code, prompt),
-                vision, a["max_iterations"], state,
+                target.id, run_id, model, system_prompt(vision, mode), _prompt_text(design_id, current_code, prompt),
+                vision, a["max_iterations"], state, mode,
             )
         else:
-            loop = _litellm_loop(target, run_id, design_id, current_code, prompt, vision, state)
+            loop = _litellm_loop(target, run_id, design_id, current_code, prompt, vision, state, mode)
         async for ev in loop:
             yield ev
 
@@ -207,6 +256,8 @@ async def run(
         elif final.get("title") and db.get_design(design_id) and db.get_design(design_id)["title"] == "Untitled":
             db.rename_design(design_id, title)
         version = db.add_version(design_id, final["code"], final.get("summary", ""), stats, run_id)
+        bom = parts.normalize_bom(final.get("parts"))
+        db.set_version_hardware(design_id, version, bom, mode, final.get("hardware_note") or "")
         tags = db.get_tags(design_id)
         suggested = final.get("tags")
         if not tags and isinstance(suggested, list):
@@ -224,6 +275,9 @@ async def run(
             "code": final["code"],
             "summary": final.get("summary", ""),
             "tags": tags,
+            "bom": parts.resolve_bom(bom),
+            "hardware_mode": mode,
+            "hardware_note": final.get("hardware_note") or "",
             "stats": stats,
             "params": openscad.parse_parameters(final["code"]),
             "totals": totals,
@@ -240,7 +294,28 @@ async def run(
         yield {"type": "error", "message": message, "run_id": run_id, "totals": totals}
 
 
-async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: str, vision: bool, state: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
+def hardware_question() -> dict[str, Any]:
+    """The question Studio and MCP clients show when a request needs hardware and the
+    user has not said how to source it."""
+    stocked = sum(1 for p in parts.list_inventory() if p["quantity"] > 0)
+    return {
+        "type": "question",
+        "kind": "hardware",
+        "message": "This design looks like it needs hardware. How should I handle it?",
+        "options": [
+            {"value": "inventory", "label": parts.MODE_LABELS["inventory"],
+             "detail": f"Design around the {stocked} part types in your inventory." if stocked else "Your parts inventory is empty.",
+             "disabled": not stocked},
+            {"value": "order", "label": parts.MODE_LABELS["order"],
+             "detail": "Pick the best standard parts and give me a shopping list."},
+            {"value": "none", "label": parts.MODE_LABELS["none"],
+             "detail": "Use printed snap fits, threads or pins instead, where possible."},
+        ],
+    }
+
+
+async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: str, vision: bool, state: dict[str, Any],
+                        mode: str = "ask") -> AsyncIterator[dict[str, Any]]:
     """Buildplate's own tool-calling loop through LiteLLM."""
     import litellm
 
@@ -249,16 +324,17 @@ async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: st
     method, model, kwargs = target.method, target.model, target.kwargs
     a = store.get()["agent"]
     totals = state["totals"]
-    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(vision)}]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(vision, mode)}]
     messages += _history(design_id, current_code, prompt)
     tool_mode = True
+    tools = TOOLS + [LIST_PARTS_TOOL]
 
     for step in range(1, a["max_iterations"] + 1):
         yield {"type": "status", "message": f"Thinking (step {step} of {a['max_iterations']})"}
         t0 = time.time()
         call = dict(kwargs, messages=messages, temperature=a["temperature"], max_tokens=a["max_output_tokens"])
         if tool_mode:
-            call["tools"] = TOOLS
+            call["tools"] = tools
             call["tool_choice"] = "auto"
         try:
             resp = await litellm.acompletion(**call)
@@ -321,6 +397,10 @@ async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: st
             code = args.get("code", "")
             name = c.function.name
             yield {"type": "tool", "name": name}
+            if name == "list_parts":
+                found = parts.search_for_agent(str(args.get("query") or ""), str(args.get("category") or ""))
+                messages.append({"role": "tool", "tool_call_id": c.id, "content": found})
+                continue
             if not code:
                 messages.append({"role": "tool", "tool_call_id": c.id, "content": "Error: 'code' is required."})
                 continue
@@ -330,9 +410,14 @@ async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: st
                 yield e
             if check["ok"]:
                 state["last_good"] = {"code": code, "stats": check["stats"]}
-            if name == "submit_design" and check["ok"]:
-                state["final"] = {"code": code, "title": args.get("title", ""), "summary": args.get("summary", ""), "tags": args.get("tags") or []}
+            problem = parts.check_submission(mode, args.get("parts") or [], str(args.get("hardware_note") or "")) if name == "submit_design" else None
+            if name == "submit_design" and check["ok"] and not problem:
+                state["final"] = {"code": code, "title": args.get("title", ""), "summary": args.get("summary", ""), "tags": args.get("tags") or [],
+                                  "parts": args.get("parts") or [], "hardware_note": str(args.get("hardware_note") or "")}
                 return
+            if problem:
+                messages.append({"role": "tool", "tool_call_id": c.id, "content": problem})
+                continue
             if name == "submit_design":
                 result_text = "Not saved, fix these problems first.\n" + result_text
             messages.append({"role": "tool", "tool_call_id": c.id, "content": result_text})
