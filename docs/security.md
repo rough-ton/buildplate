@@ -63,6 +63,15 @@ The MCP bearer token is not enough. Without a password, connections can still be
 - Each request runs GitHub's Copilot runtime through the Copilot SDK in its isolated ("empty") mode, with an allowlist of only Buildplate's `check_design`, `list_parts` and `submit_design`. It has no shell, file or web tools, runs in an empty temporary folder, and gets a minimal environment with its own home folder (`/data/copilot/<connection>`) and none of the server's `GH_TOKEN`, `GITHUB_TOKEN` or other variables. Tool permission requests are refused.
 - The runtime is downloaded by the SDK from GitHub's `github/copilot-cli` releases into `/data/tools/copilot` and verified against GitHub's published SHA-256 sums before it is used. The SDK version (and so the runtime version) is pinned in `requirements.txt`.
 
+## Update check
+
+To show whether a newer release is out, Settings asks GitHub's API for the latest Buildplate release (`https://api.github.com/repos/rough-ton/buildplate/releases/latest`).
+
+- It sends nothing about you, your designs or your connections: only a `Buildplate/<version>` user agent and your server's IP address, which GitHub sees for any request.
+- It runs when you open Settings, at most every 6 hours (30 minutes after a failed check), and never blocks the page. Offline or blocked, Settings just shows the version.
+- Builds without a release version (`dev` and `edge-...`) don't check.
+- Turn it off under **Settings, About, Check for updates**.
+
 ## Running the code the model writes
 
 OpenSCAD code is rendered by the OpenSCAD program inside the container, as an unprivileged user. OpenSCAD's language cannot run shell commands, and it can only read files through `include`, `use`, `import` and `surface`. Paths are resolved relative to a temporary working folder and the library folders.

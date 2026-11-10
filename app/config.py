@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 
 APP_NAME = "Buildplate"
-VERSION = os.environ.get("BUILDPLATE_VERSION", "0.1.0")
+# Release images get this from their git tag; local and untagged builds report "dev".
+VERSION = os.environ.get("BUILDPLATE_VERSION", "") or "dev"
 
 DATA_DIR = Path(os.environ.get("BUILDPLATE_DATA", "/data")).resolve()
 DESIGNS_DIR = DATA_DIR / "designs"

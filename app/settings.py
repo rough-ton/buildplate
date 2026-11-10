@@ -109,6 +109,8 @@ DEFAULTS: dict[str, Any] = {
     # optional Amazon associate tag added to Amazon links.
     "parts": {"store_region": "us", "amazon_domain": "amazon.com", "amazon_tag": ""},
     "server": {"public_url": ""},
+    # Ask GitHub whether a newer release exists, shown next to the version in Settings.
+    "updates": {"check": True},
 }
 
 
@@ -491,6 +493,8 @@ def _validate(s: dict[str, Any]) -> None:
         raise ValueError("Unknown connection for the design agent")
     if a.get("hardware_mode") not in ("ask", "inventory", "order", "none"):
         a["hardware_mode"] = "ask"
+    up = s.setdefault("updates", {})
+    up["check"] = up.get("check") not in (False, "false", "off", 0)
     pt = s.setdefault("parts", {})
     from .parts import AMAZON_DOMAINS, STORE_REGIONS
 

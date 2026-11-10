@@ -26,6 +26,7 @@ from . import agent, auth, auth_methods, claude_code, claude_runtime, config, co
 from . import reference as references
 from .mcp_server import mcp
 from .settings import public_connection, store
+from . import updates
 
 mcp_app = mcp.streamable_http_app(
     streamable_http_path="/mcp",
@@ -550,6 +551,12 @@ async def system():
         "packages": {p: _pkg(p) for p in ("litellm", "mcp", "fastapi", "trimesh", "manifold3d")},
         "mcp_path": "/mcp",
     }
+
+
+@app.get("/api/system/update")
+async def update_status():
+    """Whether a newer Buildplate release is on GitHub (cached; never fails)."""
+    return await updates.status(store.get()["updates"]["check"])
 
 
 @app.post("/api/system/clear-cache")

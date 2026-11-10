@@ -10,7 +10,7 @@
 ARG BASE_IMAGE=openscad/openscad:dev
 FROM ${BASE_IMAGE}
 
-ARG VERSION=0.1.0
+ARG VERSION=dev
 ARG BOSL2_REF=master
 ARG MCAD_REF=master
 
