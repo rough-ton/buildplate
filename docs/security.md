@@ -40,6 +40,15 @@ Creating, editing, testing or removing a connection (`POST`, `PATCH` and `DELETE
 
 The MCP bearer token is not enough. Without a password, connections can still be listed (credentials masked) and used, and environment-variable connections are still added, but they cannot be changed from the browser. Inside Docker, a browser on the host connects through the Docker network rather than loopback, so in practice you need a password.
 
+## Claude plan connections
+
+- Adding, changing, signing in or out of a Claude plan connection needs a web UI password and a signed-in session. Unlike other connections, a request from the server itself is not enough.
+- Sign-in uses a browser terminal over a WebSocket. It needs that session and a same-origin browser, and only runs `claude auth login` or `claude auth logout`: never a shell or the interactive Claude Code app. It closes after 10 minutes without activity.
+- Claude Code keeps its own credentials in `/data/claude-code/<connection>` (mode 700). Buildplate does not read them.
+- Each request runs Claude Code with no built-in tools (`--tools ""`, `--restricted`), only Buildplate's MCP server (`--strict-mcp-config`), in an empty temporary folder, with a minimal environment that excludes `ANTHROPIC_*`, cloud-provider and token variables.
+- Claude Code reaches Buildplate's tools at `/mcp-run`, which accepts only loopback requests carrying the request's one-time token. The token stops working when the request ends.
+- Claude Code is downloaded from Anthropic's release bucket and verified against the SHA-256 in Anthropic's release manifest before it is used. Its self-updater is turned off so the pinned version stays in place.
+
 ## Running the code the model writes
 
 OpenSCAD code is rendered by the OpenSCAD program inside the container, as an unprivileged user. OpenSCAD's language cannot run shell commands, and it can only read files through `include`, `use`, `import` and `surface`. Paths are resolved relative to a temporary working folder and the library folders.

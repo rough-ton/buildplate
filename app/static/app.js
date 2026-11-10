@@ -592,7 +592,9 @@ async function Studio(root, [designId]) {
       h("span", { class: "pill tabular" }, `${fmtInt(t.input_tokens)} in`),
       h("span", { class: "pill tabular" }, `${fmtInt(t.output_tokens)} out`),
       t.cache_read_tokens ? h("span", { class: "pill tabular" }, `${fmtInt(t.cache_read_tokens)} cached`) : null,
-      h("span", { class: "pill accent tabular" }, fmtCost(t.cost_usd, t.cost_known)),
+      t.billing === "subscription"
+        ? h("span", { class: "pill accent", title: t.est_cost_usd ? `About ${fmtCost(t.est_cost_usd)} at API prices` : "Counted against your plan's usage limits" }, "Included in plan")
+        : h("span", { class: "pill accent tabular" }, fmtCost(t.cost_usd, t.cost_known)),
       steps ? h("span", { class: "pill" }, `${steps} step${steps > 1 ? "s" : ""}`) : null);
   }
 
@@ -765,6 +767,112 @@ function tagEditor(save) {
   });
   input.addEventListener("blur", addFromInput);
   return { el, set(next) { tags = [...(next || [])]; render(); } };
+}
+
+// ================================================================= CLAUDE CODE SIGN-IN
+let xtermLoading = null;
+function loadXterm() {
+  xtermLoading ||= new Promise((resolve, reject) => {
+    document.head.append(h("link", { rel: "stylesheet", href: "/vendor/xterm/xterm.css" }));
+    const sc = h("script", { src: "/vendor/xterm/xterm.js" });
+    sc.onload = () => resolve(window.Terminal);
+    sc.onerror = () => reject(new Error("Could not load the terminal"));
+    document.head.append(sc);
+  });
+  return xtermLoading;
+}
+
+// Runs Claude Code's own `claude auth login` (or logout) in a browser terminal.
+// Resolves with the connection status reported when it finishes.
+async function openClaudeTerminal(cid, action = "login") {
+  const Terminal = await loadXterm();
+  return new Promise((resolve) => {
+    const screen = h("div", { class: "term-screen" });
+    const linkRow = h("div", { class: "row term-link", hidden: true });
+    const state = h("span", { class: "hint", style: "margin:0" }, "Starting Claude Code");
+    const line = h("input", { type: "text", placeholder: "Paste the code here if typing into the terminal does not work", "aria-label": "Send text to Claude Code", autocomplete: "off" });
+    const sendBtn = h("button", { class: "btn btn-sm" }, "Send");
+    const closeBtn = h("button", { class: "btn" }, "Close");
+    const dialog = h("dialog", { class: "pp term", "aria-label": "Sign in with Claude" },
+      h("div", { class: "pp-head" }, h("div", {},
+        h("h2", {}, action === "login" ? "Sign in with Claude" : "Sign out of Claude"),
+        h("p", {}, action === "login"
+          ? "This is Claude Code's own sign-in. Open the link it shows, sign in to your Claude account, then paste the code back here."
+          : "Claude Code is signing this connection out."))),
+      h("div", { class: "term-body" }, linkRow, screen,
+        h("p", { class: "hint" }, "Buildplate passes your keystrokes to Claude Code and does not see or store your Claude credentials.")),
+      h("div", { class: "pp-foot" }, state, h("span", { class: "spacer" }), line, sendBtn, closeBtn));
+    document.body.append(dialog);
+    dialog.showModal();
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const term = new Terminal({
+      cols: 100, rows: 22, convertEol: false, cursorBlink: true, fontFamily: getComputedStyle(document.body).getPropertyValue("--mono") || "monospace", fontSize: 13,
+      theme: dark ? { background: "#13181E", foreground: "#E6EAF0" } : { background: "#F6F8FA", foreground: "#1C2430", cursor: "#1C2430", selectionBackground: "#B9C2CC" },
+    });
+    term.open(screen);
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${proto}//${location.host}/api/connections/${encodeURIComponent(cid)}/terminal?action=${action}`);
+    let result = null;
+    let raw = "";
+    // Surface Claude Code's sign-in link as a button: long URLs are hard to select in a
+    // terminal, especially on a phone. The link opens Anthropic's own sign-in page.
+    const findLink = (text) => {
+      raw = (raw + text.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b\][^\x07]*\x07|[\r\n]/g, "")).slice(-8000);
+      // only once Claude Code's prompt follows the link, so the URL is complete
+      const m = raw.match(/https:\/\/[a-z0-9.-]*claude\.(?:ai|com)\/[^\s"'<>]*oauth[^\s"'<>]*?(?=Paste code)/i);
+      if (m && linkRow.hidden) {
+        linkRow.append(h("a", { class: "btn btn-primary btn-sm", href: m[0], target: "_blank", rel: "noopener noreferrer" }, "Open the Claude sign-in page"),
+          h("span", { class: "hint", style: "margin:0" }, "Then copy the code it shows and paste it below."));
+        linkRow.hidden = false;
+      }
+    };
+    const send = (data) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: "input", data })); };
+    term.onData(send);
+    ws.onopen = () => { state.textContent = "Connected to Claude Code"; ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows })); term.focus(); };
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "output") { term.write(msg.data); findLink(msg.data); }
+      else if (msg.type === "error") { state.textContent = msg.message; state.style.color = "var(--bad)"; }
+      else if (msg.type === "exit") {
+        result = msg.status || null;
+        const ok = result?.state === "connected";
+        state.textContent = action === "login" ? (ok ? result.detail || "Signed in" : "Not signed in. You can try again.") : "Signed out.";
+        state.style.color = action === "login" ? (ok ? "var(--good)" : "var(--bad)") : "";
+        closeBtn.textContent = "Done";
+      }
+    };
+    ws.onclose = (e) => {
+      if (e.code === 4403) { state.textContent = "Not allowed. Sign in to Buildplate with your password and try again."; state.style.color = "var(--bad)"; }
+      else if (!result) state.textContent = "Claude Code has finished.";
+      line.disabled = sendBtn.disabled = true;
+    };
+    const sendLine = () => { if (line.value) { send(line.value + "\r"); line.value = ""; term.focus(); } };
+    sendBtn.addEventListener("click", sendLine);
+    line.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); sendLine(); } });
+    const finish = async () => {
+      try { ws.close(); } catch (_) {}
+      term.dispose(); dialog.remove();
+      // closed before Claude Code finished: ask for the status rather than guess
+      if (!result) { try { result = (await api(`/api/connections/${cid}/test`, { method: "POST" })).connection.status; } catch (_) {} }
+      resolve(result);
+    };
+    closeBtn.addEventListener("click", () => dialog.close());
+    dialog.addEventListener("close", finish, { once: true });
+  });
+}
+
+// Installs the pinned Claude Code release, reporting progress in statusEl.
+async function installClaudeCode(statusEl) {
+  let info = await api("/api/claude-code/install", { method: "POST" });
+  while (info.install.running) {
+    const { done, total } = info.install;
+    statusEl.textContent = total ? `Installing Claude Code ${info.version}: ${Math.round((done / total) * 100)}%` : `Installing Claude Code ${info.version}`;
+    await new Promise((r) => setTimeout(r, 800));
+    info = await api("/api/claude-code");
+  }
+  if (!info.installed) throw new Error(info.install.error || "Claude Code could not be installed.");
+  statusEl.textContent = `Claude Code ${info.version} installed`;
+  return info;
 }
 
 // ================================================================= LIBRARY
@@ -964,7 +1072,7 @@ async function Usage(root) {
       kpi("Requests", fmtInt(t.runs), `avg ${fmtTokens(Math.round(t.avg_tokens))} tokens each`),
       kpi("Input tokens", fmtTokens(t.input_tokens), t.cache_read_tokens ? `${fmtTokens(t.cache_read_tokens)} from cache` : "sent to the model"),
       kpi("Output tokens", fmtTokens(t.output_tokens), "generated by the model"),
-      kpi("Estimated cost", fmtCost(t.cost_usd), "at list prices"));
+      kpi("Estimated cost", fmtCost(t.cost_usd), t.plan_runs ? `pay-per-use only; ${fmtInt(t.plan_runs)} plan request${t.plan_runs === 1 ? "" : "s"} included in your Claude plan (about ${fmtCost(t.plan_est_cost_usd)} at API prices)` : "at list prices"));
 
     chartSec.innerHTML = "";
     chartSec.append(h("div", { class: "section-head" }, h("h2", {}, "Tokens per day")),
@@ -973,7 +1081,7 @@ async function Usage(root) {
 
     modelSec.innerHTML = "";
     const mt = h("table", { class: "data" }, h("thead", {}, h("tr", {}, h("th", {}, "Model"), h("th", {}, "Provider"), h("th", { class: "r" }, "Requests"), h("th", { class: "r" }, "Input"), h("th", { class: "r" }, "Output"), h("th", { class: "r" }, "Cost"))),
-      h("tbody", {}, sum.by_model.map((m) => h("tr", {}, h("td", {}, m.model), h("td", {}, providerLabel(m.provider)), h("td", { class: "r" }, fmtInt(m.runs)), h("td", { class: "r" }, fmtInt(m.input_tokens)), h("td", { class: "r" }, fmtInt(m.output_tokens)), h("td", { class: "r" }, fmtCost(m.cost_usd))))));
+      h("tbody", {}, sum.by_model.map((m) => h("tr", {}, h("td", {}, m.model), h("td", {}, providerLabel(m.provider)), h("td", { class: "r" }, fmtInt(m.runs)), h("td", { class: "r" }, fmtInt(m.input_tokens)), h("td", { class: "r" }, fmtInt(m.output_tokens)), h("td", { class: "r" }, m.billing === "subscription" ? h("span", { title: `About ${fmtCost(m.est_cost_usd)} at API prices` }, "Plan") : fmtCost(m.cost_usd))))));
     modelSec.append(h("div", { class: "section-head" }, h("h2", {}, "By model")), h("div", { class: "section-body table-scroll" }, sum.by_model.length ? mt : h("p", { class: "hint" }, "No requests in this period.")));
     await loadRuns();
   }
@@ -993,7 +1101,7 @@ async function Usage(root) {
         h("td", { class: "r" }, fmtInt(r.iterations)),
         h("td", { class: "r" }, fmtInt(r.input_tokens)),
         h("td", { class: "r" }, fmtInt(r.output_tokens)),
-        h("td", { class: "r" }, fmtCost(r.cost_usd, !!r.cost_known)),
+        h("td", { class: "r" }, r.billing === "subscription" ? h("span", { title: r.est_cost_usd ? `Included in your plan. About ${fmtCost(r.est_cost_usd)} at API prices` : "Included in your plan" }, "Plan") : fmtCost(r.cost_usd, !!r.cost_known)),
         h("td", {}, r.design_id ? h("a", { href: `#/studio/${r.design_id}`, onclick: (e) => e.stopPropagation() }, "Open") : ""));
       const toggle = async () => {
         if (tr.nextSibling?.classList?.contains("steps")) { tr.nextSibling.remove(); return; }
@@ -1086,8 +1194,9 @@ async function Settings(root) {
 
   // ---- AI connections (saved individually, since connecting needs a live test)
   const connWrap = h("div", {});
-  const STATE = { connected: ["good", "Connected"], untested: ["", "Not tested"], error: ["bad", "Error"], needs_sign_in: ["warn", "Needs sign-in"], expired: ["warn", "Expired"] };
+  const STATE = { connected: ["good", "Connected"], untested: ["", "Not tested"], error: ["bad", "Error"], needs_sign_in: ["warn", "Needs sign-in"], expired: ["warn", "Sign-in expired"], not_installed: ["warn", "Not installed"] };
   let methods = null;
+  let connCtx = { passwordSession: false, passwordReason: "", claudeCode: { installed: false } };
 
   // Inputs for a method's fields. Secrets are never sent back, so a saved one shows
   // as a hint and is only replaced when something is typed.
@@ -1148,8 +1257,9 @@ async function Settings(root) {
   function connCard(c, editable, active) {
     const method = methods.find((m) => m.id === c.method);
     const [tone, stateLabel] = STATE[c.status?.state] || ["", c.status?.state || ""];
+    const isClaude = method?.kind === "cli_session";
     const statusEl = h("span", { class: "hint", style: `margin:0${c.status?.state === "error" ? ";color:var(--bad)" : ""}` },
-      c.status?.state === "error" ? c.status.detail : c.models?.length ? `${c.models.length} model${c.models.length === 1 ? "" : "s"}` : c.status?.detail || "");
+      c.status?.state === "error" || isClaude ? c.status?.detail || "" : c.models?.length ? `${c.models.length} model${c.models.length === 1 ? "" : "s"}` : c.status?.detail || "");
     const enabled = h("input", { type: "checkbox", checked: c.enabled, disabled: !editable, "aria-label": `Enable ${c.label}` });
     enabled.addEventListener("change", async () => {
       try { await api(`/api/connections/${c.id}`, { method: "PATCH", json: { enabled: enabled.checked } }); }
@@ -1168,6 +1278,7 @@ async function Settings(root) {
         editable ? h("button", { class: "btn btn-sm", onclick: () => testConnection(c, statusEl) }, "Test") : null,
         editable ? h("button", { class: "btn btn-sm btn-ghost", onclick: () => { editArea.hidden = !editArea.hidden; } }, "Edit") : null),
       h("div", { class: "conn-status" }, statusEl),
+      isClaude && editable ? claudeActions(c, statusEl) : null,
       editArea);
     if (editable && method) {
       const labelIn = h("input", { type: "text", value: c.label, id: `cl-${c.id}`, maxlength: 60 });
@@ -1193,6 +1304,44 @@ async function Settings(root) {
     return card;
   }
 
+  // Install, sign-in and sign-out controls for a Claude plan connection.
+  function claudeActions(c, statusEl) {
+    const row = h("div", { class: "row conn-actions" });
+    if (!connCtx.passwordSession) {
+      row.append(h("span", { class: "hint", style: "margin:0" }, connCtx.passwordReason));
+      return row;
+    }
+    if (!connCtx.claudeCode.installed) {
+      const btn = h("button", { class: "btn btn-sm btn-primary" }, "Install Claude Code");
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try { await installClaudeCode(statusEl); await afterConnectionChange(); }
+        catch (err) { statusEl.textContent = err.message; statusEl.style.color = "var(--bad)"; btn.disabled = false; }
+      });
+      row.append(btn, h("span", { class: "hint", style: "margin:0" }, `Downloads Claude Code ${connCtx.claudeCode.version} from Anthropic and checks it before first use.`));
+      return row;
+    }
+    if (c.status?.state === "connected") {
+      const out = h("button", { class: "btn btn-sm" }, "Sign out");
+      out.addEventListener("click", async () => {
+        if (!confirm(`Sign "${c.label}" out of Claude?`)) return;
+        try { await api(`/api/connections/${c.id}/sign-out`, { method: "POST" }); toast("Signed out of Claude"); }
+        catch (err) { toast(err.message, "bad"); }
+        await afterConnectionChange();
+      });
+      row.append(out);
+    } else {
+      const sign = h("button", { class: "btn btn-sm btn-primary" }, "Sign in with Claude");
+      sign.addEventListener("click", async () => {
+        const st = await openClaudeTerminal(c.id, "login");
+        if (st?.state === "connected") toast(`${c.label} is signed in`);
+        await afterConnectionChange();
+      });
+      row.append(sign);
+    }
+    return row;
+  }
+
   function addConnectionForm() {
     const wrap = h("div", { class: "conn-add" });
     const methodSel = h("select", { id: "conn-method", "aria-label": "Connection type" }, h("option", { value: "" }, "Choose a provider and method"));
@@ -1206,14 +1355,23 @@ async function Settings(root) {
       if (!m) return;
       const labelIn = h("input", { type: "text", id: "conn-new-label", value: m.family_label, maxlength: 60 });
       const form = methodForm(m, null);
-      const go = h("button", { class: "btn btn-primary" }, "Connect");
-      const status = h("span", { class: "hint", style: "margin:0" });
+      const go = h("button", { class: "btn btn-primary", disabled: m.requires_password && !connCtx.passwordSession }, m.kind === "cli_session" ? "Add and sign in" : "Connect");
+      const status = h("span", { class: "hint", style: "margin:0" }, m.requires_password && !connCtx.passwordSession ? connCtx.passwordReason : "");
       go.addEventListener("click", async () => {
         go.disabled = true; status.textContent = "Saving"; status.style.color = "";
         let created;
         try {
           created = await api("/api/connections", { method: "POST", json: { method: m.id, label: labelIn.value, values: form.read() } });
         } catch (err) { status.textContent = err.message; status.style.color = "var(--bad)"; go.disabled = false; return; }
+        if (m.kind === "cli_session") {
+          try {
+            if (!connCtx.claudeCode.installed) await installClaudeCode(status);
+            const st = await openClaudeTerminal(created.id, "login");
+            if (st?.state === "connected") toast(`${created.label} is signed in`);
+          } catch (err) { toast(`Added, but ${err.message}`, "bad"); }
+          await afterConnectionChange();
+          return;
+        }
         status.textContent = "Testing";
         try {
           const r = await api(`/api/connections/${created.id}/test`, { method: "POST" });
@@ -1234,7 +1392,9 @@ async function Settings(root) {
 
   async function renderConnections() {
     methods ||= (await api("/api/auth-methods")).methods;
-    const { connections: conns, editable, reason, active } = await api("/api/connections");
+    const listing = await api("/api/connections");
+    const { connections: conns, editable, reason, active } = listing;
+    connCtx = { passwordSession: listing.password_session, passwordReason: listing.password_reason, claudeCode: listing.claude_code };
     connWrap.innerHTML = "";
     if (!editable) {
       connWrap.append(h("div", { class: "issue" }, h("span", {}, reason, " ",
