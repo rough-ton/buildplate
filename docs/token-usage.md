@@ -27,6 +27,7 @@ Input grows with each step because the model sees the whole conversation so far,
 
 - For Anthropic, OpenAI, Gemini and OpenRouter, Buildplate uses LiteLLM's built-in price list, which includes discounts for cached input where the provider offers them.
 - For Ollama and other OpenAI-compatible servers, cost is $0.
+- For a Claude plan connection, requests are **Included in plan**: they count against your Claude plan's usage limits, not toward the cost totals. Hover to see what the same tokens would cost at API prices. Usage shows plan requests separately.
 - If a model is not in the price list, its cost shows as **n/a**. Add a price in **Settings > Pricing overrides** using the form `provider/model`, for example `openrouter/vendor/model-name`, with prices per million input and output tokens. Overrides also let you match a negotiated rate.
 
 Costs are estimates at list price. Your provider's invoice is the final word.

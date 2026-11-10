@@ -57,6 +57,17 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
  && mkdir -p /data && chown 1000:1000 /data \
  && openscad --version
 
+# Optional: bake Claude Code (for Claude plan connections) into the image instead of
+# installing it on demand. The official binary is downloaded and checksum-verified.
+#   docker build --build-arg CLAUDE_CODE_VERSION=2.1.311 .
+ARG CLAUDE_CODE_VERSION=""
+RUN if [ -n "$CLAUDE_CODE_VERSION" ]; then \
+      BUILDPLATE_DATA=/tmp/bp BUILDPLATE_CLAUDE_CODE_VERSION="$CLAUDE_CODE_VERSION" \
+        /opt/venv/bin/python -c "import asyncio; from app import claude_code; print(asyncio.run(claude_code.install()))" \
+      && install -D -m 0755 "/tmp/bp/tools/claude-code/$CLAUDE_CODE_VERSION/claude" /opt/claude-code/claude \
+      && rm -rf /tmp/bp && /opt/claude-code/claude --version; \
+    fi
+
 EXPOSE 8080
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

@@ -8,6 +8,22 @@ Open **Settings > AI connections**, add a connection, then choose a **Default mo
 
 The key was revoked, mistyped or has no billing set up. Select **Edit** on the connection, paste the key again and select **Save and test**. Check the provider's console for spending limits.
 
+## "Claude Code is not signed in" or "Your Claude sign-in has expired"
+
+Open **Settings > AI connections** and select **Sign in with Claude** on the Claude plan card. If the sign-in terminal says you are not allowed, sign in to Buildplate with your password first.
+
+## "Your Claude plan's usage limit has been reached"
+
+Claude plan requests share your plan's normal limits with Claude on the web and in Claude Code. Wait for the limit to reset, or pick a model on an API key connection for this request.
+
+## Running from source on a Mac: "Couldn't save your login"
+
+On macOS, Claude Code saves its sign-in to the Keychain, which it cannot reach from a background service, so the sign-in fails. This only affects running Buildplate from source on a Mac; the Docker image runs Linux, where Claude Code saves its sign-in to a file.
+
+## Claude Code will not install
+
+The container needs internet access to `downloads.claude.ai`. Behind a proxy, set `HTTPS_PROXY`. If it downloads but "cannot run in this container", the data folder is probably mounted with `noexec`. You can also build the image with `--build-arg CLAUDE_CODE_VERSION=2.1.311`, or point `BUILDPLATE_CLAUDE_BIN` at a Claude Code binary.
+
 ## Ollama: "Could not reach ..."
 
 - Inside the container, `localhost` is the container itself. Use the host's LAN IP or `http://host.docker.internal:11434`.

@@ -7,23 +7,33 @@ import io
 import json
 import platform
 import re
+import contextlib
 import shutil
 from contextlib import asynccontextmanager
 from importlib import metadata
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+import asyncio
+
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
-from . import agent, auth, auth_methods, config, connections, db, openscad, printers, search
+from . import agent, auth, auth_methods, claude_code, claude_runtime, config, connections, db, openscad, printers, search, terminal
 from .mcp_server import mcp
 from .settings import public_connection, store
 
 mcp_app = mcp.streamable_http_app(
     streamable_http_path="/mcp",
+    stateless_http=True,
+    json_response=True,
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+)
+# Run-scoped MCP endpoint for Claude Code design runs (see claude_runtime.py).
+run_mcp_app = claude_runtime.run_mcp.streamable_http_app(
+    streamable_http_path="/mcp-run",
     stateless_http=True,
     json_response=True,
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
@@ -35,19 +45,23 @@ async def lifespan(app: FastAPI):
     config.ensure_dirs()
     db.init()
     store.get()
-    async with mcp.session_manager.run():
+    async with mcp.session_manager.run(), claude_runtime.run_mcp.session_manager.run():
         yield
 
 
 app = FastAPI(title="Buildplate", version=config.VERSION, lifespan=lifespan, docs_url="/api/docs", redoc_url=None)
-for route in mcp_app.routes:
+for route in [*run_mcp_app.routes, *mcp_app.routes]:
     app.router.routes.append(route)
 
 
 @app.middleware("http")
 async def guard(request: Request, call_next):
     path = request.url.path
-    if path.startswith("/mcp"):
+    if path.startswith("/mcp-run"):
+        # Only Claude Code runs started by this server, from this server, with their run token.
+        if not (auth.is_loopback(request) and claude_runtime.token_valid(auth.bearer(request))):
+            return JSONResponse({"error": "Not a valid design run"}, status_code=401)
+    elif path.startswith("/mcp"):
         if not auth.mcp_allowed(request):
             return JSONResponse({"error": "Missing or invalid bearer token"}, status_code=401, headers={"WWW-Authenticate": "Bearer"})
     elif path.startswith("/api/") and not path.startswith("/api/docs") and path != "/api/openapi.json":
@@ -178,9 +192,17 @@ async def clear_mcp_token():
 
 
 # ---- AI connections --------------------------------------------------------------
-def _admin(request: Request) -> None:
-    if not auth.admin_allowed(request):
-        raise HTTPException(403, auth.ADMIN_REQUIRED)
+def _admin(request: Request, method_id: str | None = None, cid: str | None = None) -> None:
+    """Gate connection changes. Claude plan connections need a password session."""
+    if cid and not method_id:
+        try:
+            method_id = connections.get(cid)["method"]
+        except KeyError:
+            raise HTTPException(404, "No connection with that id")
+    method = auth_methods.METHODS.get(method_id or "")
+    strict = bool(method and method.requires_password)
+    if not auth.admin_allowed(request, strict=strict):
+        raise HTTPException(403, auth.PASSWORD_REQUIRED if strict else auth.ADMIN_REQUIRED)
 
 
 def _conn_errors(fn, *args, **kwargs):
@@ -205,31 +227,37 @@ async def list_connections(request: Request):
         "active": store.get()["agent"]["connection"],
         "editable": editable,
         "reason": "" if editable else auth.ADMIN_REQUIRED,
+        # Claude plan connections need a signed-in password session
+        "password_session": auth.admin_allowed(request, strict=True),
+        "password_reason": auth.PASSWORD_REQUIRED,
+        "claude_code": claude_code.info(),
     }
 
 
 @app.post("/api/connections")
 async def create_connection(body: ConnectionBody, request: Request):
-    _admin(request)
+    _admin(request, method_id=body.method)
     return _conn_errors(connections.create, body.method, body.label, body.values, body.enabled)
 
 
 @app.patch("/api/connections/{cid}")
 async def patch_connection(cid: str, body: ConnectionPatch, request: Request):
-    _admin(request)
+    _admin(request, cid=cid)
     return _conn_errors(connections.update, cid, body.label, body.values, body.enabled)
 
 
 @app.delete("/api/connections/{cid}")
 async def delete_connection(cid: str, request: Request):
-    _admin(request)
+    _admin(request, cid=cid)
+    if connections.get(cid)["method"] == "anthropic.claude_code":
+        await claude_code.forget(cid)  # sign out through Claude Code and drop its folder
     _conn_errors(connections.delete, cid)
     return {"ok": True}
 
 
 @app.post("/api/connections/{cid}/test")
 async def test_connection(cid: str, request: Request):
-    _admin(request)
+    _admin(request, cid=cid)
     try:
         models = await connections.test(cid)
     except KeyError:
@@ -237,6 +265,72 @@ async def test_connection(cid: str, request: Request):
     except auth_methods.MethodError as exc:
         raise HTTPException(400, str(exc))
     return {"models": models, "count": len(models), "connection": public_connection(connections.get(cid))}
+
+
+# ---- Claude Code (Claude plan connections) ---------------------------------------------
+_install_task: asyncio.Task | None = None
+
+
+@app.get("/api/claude-code")
+async def claude_code_info():
+    return claude_code.info()
+
+
+@app.post("/api/claude-code/install")
+async def claude_code_install(request: Request):
+    """Start installing the pinned Claude Code release; poll GET /api/claude-code."""
+    global _install_task
+    _admin(request, method_id="anthropic.claude_code")
+    if claude_code.binary() is None and not (_install_task and not _install_task.done()):
+        async def go():
+            try:
+                await claude_code.install()
+            except claude_code.ClaudeCodeError:
+                pass  # recorded in claude_code.INSTALL["error"]
+
+        claude_code.INSTALL.update(running=True, error="", done=0, total=0)
+        _install_task = asyncio.create_task(go())
+    return claude_code.info()
+
+
+@app.post("/api/connections/{cid}/sign-out")
+async def sign_out_connection(cid: str, request: Request):
+    _admin(request, cid=cid)
+    if connections.get(cid)["method"] != "anthropic.claude_code":
+        raise HTTPException(400, "Only Claude plan connections sign out.")
+    try:
+        await claude_code.logout(cid)
+    except claude_code.ClaudeCodeError as exc:
+        raise HTTPException(400, str(exc))
+    connections.mark(cid, "needs_sign_in", "Signed out.")
+    return {"connection": public_connection(connections.get(cid))}
+
+
+@app.websocket("/api/connections/{cid}/terminal")
+async def connection_terminal(ws: WebSocket, cid: str, action: str = "login"):
+    """Claude Code's own sign-in (or sign-out) in a browser terminal. Needs a password
+    session and a same-origin browser; runs only `claude auth login|logout`."""
+    ok = auth.password_session(ws.cookies) and auth.same_origin(ws.headers)
+    try:
+        conn = connections.get(cid)
+    except KeyError:
+        conn = None
+    if not ok or conn is None or conn["method"] != "anthropic.claude_code" or action not in terminal.COMMANDS:
+        await ws.close(code=4403)
+        return
+    await ws.accept()
+    code = None
+    try:
+        code = await terminal.session(ws, cid, action)
+    finally:
+        try:
+            await connections.test(cid)
+        except auth_methods.MethodError:
+            pass
+        with contextlib.suppress(Exception):
+            status = connections.get(cid)["status"]
+            await ws.send_json({"type": "exit", "code": code, "status": status})
+            await ws.close()
 
 
 # ---- printers ------------------------------------------------------------------

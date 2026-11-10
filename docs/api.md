@@ -23,7 +23,7 @@ Event types, in order of appearance:
 
 | Type | Fields |
 | --- | --- |
-| `run` | `run_id`, `provider` (family), `model`, `vision`, `connection`, `connection_label`, `billing` |
+| `run` | `run_id`, `provider` (family), `model`, `vision`, `connection`, `connection_label`, `billing` (`api`, `subscription`, `cloud` or `local`) |
 | `status` | `message` |
 | `usage` | `step`, `usage` (this call), `totals` (so far) |
 | `assistant` | `text` |
@@ -83,7 +83,11 @@ Event types, in order of appearance:
 | `POST /api/connections` | Add a connection: `{method, label?, values: {field: value}, enabled?}`. Needs a password session or a request from the server itself |
 | `PATCH /api/connections/{id}` | Change `label`, `enabled` or `values`. A secret given as `""` is cleared; one left out is kept. Same access rule |
 | `DELETE /api/connections/{id}` | Remove a connection and its credentials. Same access rule |
-| `POST /api/connections/{id}/test` | Test, save and return the model list. Same access rule |
+| `POST /api/connections/{id}/test` | Test, save and return the model list. For a Claude plan connection, asks Claude Code whether it is signed in. Same access rule |
+| `POST /api/connections/{id}/sign-out` | Sign a Claude plan connection out of Claude Code. Needs a password session |
+| `WS /api/connections/{id}/terminal?action=login\|logout` | Claude Code's own sign-in in a terminal. Needs a password session and a same-origin browser. Frames: `{type: "input"\|"resize"}` in; `{type: "output"\|"error"\|"exit"}` out |
+| `GET /api/claude-code` | Whether Claude Code is installed, its pinned version and install progress |
+| `POST /api/claude-code/install` | Start installing Claude Code. Needs a password session |
 | `POST /api/settings/password` | `{current, new}`; an empty `new` removes the password |
 | `POST /api/settings/mcp-token` | Generate a new MCP token (returned once) |
 | `DELETE /api/settings/mcp-token` | Remove the MCP token |

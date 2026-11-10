@@ -5,8 +5,8 @@ needs (and which of those are secret), who runs the design loop (the runtime), h
 is billed, and hooks to list models and build LiteLLM call arguments. A user's
 Connection (see connections.py) picks one method and holds its field values.
 
-Phase 1 covers the methods Buildplate supported before connections existed, plus
-OpenAI-compatible presets. Subscription, OAuth and cloud methods are added later.
+Methods cover API keys, local servers, OpenAI-compatible presets, and a Claude plan
+through the Claude Code CLI. OAuth and cloud methods are added later.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Any, Awaitable, Callable
 import httpx
 
 KINDS = ("api_key", "oauth_key", "oauth_tokens", "cloud", "cli_session", "none")
-RUNTIMES = ("litellm",)
+RUNTIMES = ("litellm", "cli:claude")
 BILLING = {
     "api": "Pay per use",
     "subscription": "Uses your plan",
@@ -65,12 +65,17 @@ class AuthMethod:
     vision_default: bool = False
     # Extra fixed LiteLLM kwargs, such as a preset's api_base.
     fixed: tuple[tuple[str, str], ...] = ()
+    # Needs a UI password and a signed-in session to add or change, with no
+    # exception for requests from the server itself.
+    requires_password: bool = False
 
     @property
     def secret_fields(self) -> set[str]:
         return {f.name for f in self.fields if f.secret}
 
     def litellm_kwargs(self, values: dict[str, Any], model: str) -> dict[str, Any]:
+        if self.runtime != "litellm":
+            return {}
         kwargs: dict[str, Any] = {"model": self.litellm_prefix + model, **dict(self.fixed)}
         if values.get("api_key"):
             kwargs["api_key"] = values["api_key"]
@@ -228,6 +233,28 @@ for _fam, _label, _desc, _base, _url, _vision in _PRESETS:
             list_models=_openai_style(_base), help_url=_url, vision_default=_vision,
         )
     )
+
+async def _claude_code_models(v: dict[str, Any]) -> list[str]:
+    from . import claude_code
+
+    return list(claude_code.MODELS)
+
+
+_METHODS.insert(1, AuthMethod(
+    id="anthropic.claude_code", family="anthropic", family_label="Anthropic", label="Claude plan (Claude Code)",
+    description=(
+        "Use your Claude Pro, Max, Team or Enterprise plan. Buildplate runs Claude Code, Anthropic's own "
+        "command-line app, and you sign in to it with your Claude account."
+    ),
+    kind="cli_session", billing="subscription", fields=(), litellm_prefix="", runtime="cli:claude",
+    list_models=_claude_code_models, vision_default=True, requires_password=True,
+    help_url="https://code.claude.com/docs/en/authentication",
+    compliance=(
+        "This connection runs the unmodified Claude Code app, installed from Anthropic. You sign in through "
+        "Claude Code's own login, and Claude Code keeps your sign-in in its own files: Buildplate never sees or "
+        "stores your Claude credentials. Requests use your plan's normal usage limits."
+    ),
+))
 
 METHODS: dict[str, AuthMethod] = {m.id: m for m in _METHODS}
 

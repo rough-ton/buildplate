@@ -96,6 +96,8 @@ Per-model prices in US dollars per million input and output tokens, keyed `provi
 | `OPENROUTER_API_KEY` | none | Adds an OpenRouter API key connection |
 | `XAI_API_KEY`, `MISTRAL_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY` | none | Add a connection for that provider |
 | `OLLAMA_BASE_URL` | none | Adds an Ollama connection |
+| `BUILDPLATE_CLAUDE_CODE_VERSION` | `2.1.311` | Claude Code version installed for Claude plan connections |
+| `BUILDPLATE_CLAUDE_BIN` | none | Use this Claude Code binary instead of installing one (for example one you installed yourself) |
 
 A variable adds its connection only when no connection of that method exists yet. It can then be changed in the UI; changing the environment variable later does not overwrite it. If you remove the connection while the variable is still set, it is added again on the next start.
 
@@ -110,7 +112,13 @@ Settings files from before connections existed are converted automatically on fi
 ├── buildplate.db       designs, versions, conversations, usage (SQLite)
 ├── cache/             rendered STL, 3MF and PNG files (safe to delete)
 ├── designs/           reserved for exports
-└── libraries/         your own OpenSCAD libraries
+├── libraries/         your own OpenSCAD libraries
+├── tools/claude-code/ Claude Code, installed when you add a Claude plan connection
+└── claude-code/       Claude Code's own folder per Claude plan connection, including its sign-in
 ```
+
+Backups of the data folder include Claude plan sign-ins. Treat them like the credentials they are.
+
+To ship Claude Code inside the image instead of downloading it on first use, build with `docker build --build-arg CLAUDE_CODE_VERSION=2.1.311 .`. Environment variables such as `ANTHROPIC_API_KEY` are never passed to Claude Code, so they cannot change how a Claude plan request is billed.
 
 If you lose `.secret`, saved connection credentials and the MCP token cannot be decrypted. Enter them again in Settings.

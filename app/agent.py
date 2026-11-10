@@ -137,6 +137,15 @@ def _report(stats: dict[str, Any], warnings: list[str]) -> str:
     return "\n".join(lines)
 
 
+def _prompt_text(design_id: str | None, current_code: str | None, prompt: str) -> str:
+    """The conversation as one prompt, for runtimes that take a single message."""
+    *earlier, current = _history(design_id, current_code, prompt)
+    if not earlier:
+        return current["content"]
+    lines = [f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}" for m in earlier]
+    return "Earlier conversation about this design:\n" + "\n\n".join(lines) + "\n\n" + current["content"]
+
+
 async def run(
     prompt: str,
     design_id: str | None = None,
@@ -148,22 +157,17 @@ async def run(
 ) -> AsyncIterator[dict[str, Any]]:
     """Run the design loop. connection and model default to the design agent's
     settings; provider (a provider family) is the pre-connections way to choose and
-    picks the first enabled connection of that family."""
-    import litellm
-
-    litellm.suppress_debug_info = True
-    litellm.drop_params = True
-
+    picks the first enabled connection of that family. The connection's method picks
+    the runtime: Buildplate's own LiteLLM loop, or Claude Code for a Claude plan."""
     try:
         target = connections.resolve(connection, model, provider)
     except MethodError as exc:
         yield {"type": "error", "message": str(exc)}
         return
-    method, model, kwargs = target.method, target.model, target.kwargs
+    method, model = target.method, target.model
     provider = method.family
 
-    settings = store.get()
-    a = settings["agent"]
+    a = store.get()["agent"]
     vision = providers.supports_vision(method, model)
     run_id = db.start_run(design_id, prompt, provider, model, source, target.id, method.id, method.billing)
     yield {
@@ -171,118 +175,28 @@ async def run(
         "connection": target.id, "connection_label": target.connection["label"], "billing": method.billing,
     }
 
-    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(vision)}]
-    messages += _history(design_id, current_code, prompt)
-
-    totals = {k: 0 for k in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "total_tokens")}
+    totals: dict[str, Any] = {k: 0 for k in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "total_tokens")}
     totals["cost_usd"] = 0.0
     totals["cost_known"] = True
-    last_good: dict[str, Any] | None = None
-    final: dict[str, Any] | None = None
-    tool_mode = True
+    totals["billing"] = method.billing
+    state: dict[str, Any] = {"final": None, "last_good": None, "totals": totals}
 
     try:
-        for step in range(1, a["max_iterations"] + 1):
-            yield {"type": "status", "message": f"Thinking (step {step} of {a['max_iterations']})"}
-            t0 = time.time()
-            call = dict(
-                kwargs,
-                messages=messages,
-                temperature=a["temperature"],
-                max_tokens=a["max_output_tokens"],
+        if method.runtime == "cli:claude":
+            from . import claude_runtime
+
+            loop = claude_runtime.design_loop(
+                target.id, run_id, model, system_prompt(vision), _prompt_text(design_id, current_code, prompt),
+                vision, a["max_iterations"], state,
             )
-            if tool_mode:
-                call["tools"] = TOOLS
-                call["tool_choice"] = "auto"
-            try:
-                resp = await litellm.acompletion(**call)
-            except Exception as exc:  # provider error
-                msg = str(exc)
-                if tool_mode and re.search(r"tool|function", msg, re.I) and step == 1:
-                    tool_mode = False
-                    messages[0]["content"] += TEXT_MODE_SUFFIX
-                    yield {"type": "status", "message": "Model has no tool support; switching to text mode"}
-                    continue
-                raise
-            usage = providers.usage_from_response(resp, method, model)
-            for k in totals:
-                if k == "cost_known":
-                    totals[k] = totals[k] and usage["cost_known"]
-                else:
-                    totals[k] += usage[k]
-            msg = resp.choices[0].message
-            calls = list(getattr(msg, "tool_calls", None) or [])
-            db.add_step(run_id, step, usage, int((time.time() - t0) * 1000), [c.function.name for c in calls])
-            yield {"type": "usage", "step": step, "usage": usage, "totals": dict(totals)}
+        else:
+            loop = _litellm_loop(target, run_id, design_id, current_code, prompt, vision, state)
+        async for ev in loop:
+            yield ev
 
-            text = (msg.content or "").strip() if isinstance(msg.content, str) else ""
-            if text:
-                yield {"type": "assistant", "text": text}
-
-            if not tool_mode:
-                final, last_good, feedback, events = await _text_mode_step(text, last_good, vision)
-                for e in events:
-                    yield e
-                messages.append({"role": "assistant", "content": text or "(no response)"})
-                if final:
-                    break
-                messages.append(feedback)
-                continue
-
-            if not calls:
-                if last_good:
-                    final = {"code": last_good["code"], "title": "", "summary": text[:600]}
-                    break
-                messages.append({"role": "assistant", "content": text or "(empty)"})
-                messages.append({"role": "user", "content": "Please write the OpenSCAD code and call check_design."})
-                continue
-
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": text or None,
-                    "tool_calls": [
-                        {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
-                        for c in calls
-                    ],
-                }
-            )
-            images: list[str] = []
-            for c in calls:
-                try:
-                    args = json.loads(c.function.arguments or "{}")
-                except json.JSONDecodeError:
-                    args = {}
-                code = args.get("code", "")
-                name = c.function.name
-                yield {"type": "tool", "name": name}
-                if not code:
-                    messages.append({"role": "tool", "tool_call_id": c.id, "content": "Error: 'code' is required."})
-                    continue
-                yield {"type": "code", "code": code}
-                result_text, check, img = await _check(code, vision and name == "check_design")
-                for e in check["events"]:
-                    yield e
-                if check["ok"]:
-                    last_good = {"code": code, "stats": check["stats"]}
-                if name == "submit_design" and check["ok"]:
-                    final = {"code": code, "title": args.get("title", ""), "summary": args.get("summary", ""), "tags": args.get("tags") or []}
-                    messages.append({"role": "tool", "tool_call_id": c.id, "content": "Saved."})
-                    break
-                if name == "submit_design":
-                    result_text = "Not saved, fix these problems first.\n" + result_text
-                messages.append({"role": "tool", "tool_call_id": c.id, "content": result_text})
-                if img:
-                    images.append(img)
-            if final:
-                break
-            if images:
-                content: list[dict[str, Any]] = [{"type": "text", "text": "Preview render (ISO, FRONT, RIGHT, TOP):"}]
-                content += [{"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b}"}} for b in images[-1:]]
-                messages.append({"role": "user", "content": content})
-
+        final, last_good = state["final"], state["last_good"]
         if final is None and last_good:
-            final = {"code": last_good["code"], "title": "", "summary": "Stopped at the step limit; saved the last design that rendered."}
+            final = {"code": last_good["code"], "title": "", "summary": "Stopped before submitting; saved the last design that rendered."}
         if final is None:
             raise RuntimeError("The model did not produce a design that renders. Try rephrasing or a more capable model.")
 
@@ -319,7 +233,117 @@ async def run(
         raise
     except Exception as exc:
         db.finish_run(run_id, "error", error=str(exc)[:2000], design_id=design_id)
-        yield {"type": "error", "message": _friendly(exc), "run_id": run_id, "totals": totals}
+        conn_state = getattr(exc, "connection_state", None)
+        if conn_state:
+            connections.mark(target.id, conn_state, str(exc))
+        message = str(exc) if method.runtime != "litellm" else _friendly(exc)
+        yield {"type": "error", "message": message, "run_id": run_id, "totals": totals}
+
+
+async def _litellm_loop(target, run_id: str, design_id, current_code, prompt: str, vision: bool, state: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
+    """Buildplate's own tool-calling loop through LiteLLM."""
+    import litellm
+
+    litellm.suppress_debug_info = True
+    litellm.drop_params = True
+    method, model, kwargs = target.method, target.model, target.kwargs
+    a = store.get()["agent"]
+    totals = state["totals"]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(vision)}]
+    messages += _history(design_id, current_code, prompt)
+    tool_mode = True
+
+    for step in range(1, a["max_iterations"] + 1):
+        yield {"type": "status", "message": f"Thinking (step {step} of {a['max_iterations']})"}
+        t0 = time.time()
+        call = dict(kwargs, messages=messages, temperature=a["temperature"], max_tokens=a["max_output_tokens"])
+        if tool_mode:
+            call["tools"] = TOOLS
+            call["tool_choice"] = "auto"
+        try:
+            resp = await litellm.acompletion(**call)
+        except Exception as exc:  # provider error
+            msg = str(exc)
+            if tool_mode and re.search(r"tool|function", msg, re.I) and step == 1:
+                tool_mode = False
+                messages[0]["content"] += TEXT_MODE_SUFFIX
+                yield {"type": "status", "message": "Model has no tool support; switching to text mode"}
+                continue
+            raise
+        usage = providers.usage_from_response(resp, method, model)
+        for k in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "total_tokens", "cost_usd"):
+            totals[k] += usage[k]
+        totals["cost_known"] = totals["cost_known"] and usage["cost_known"]
+        msg = resp.choices[0].message
+        calls = list(getattr(msg, "tool_calls", None) or [])
+        db.add_step(run_id, step, usage, int((time.time() - t0) * 1000), [c.function.name for c in calls])
+        yield {"type": "usage", "step": step, "usage": usage, "totals": dict(totals)}
+
+        text = (msg.content or "").strip() if isinstance(msg.content, str) else ""
+        if text:
+            yield {"type": "assistant", "text": text}
+
+        if not tool_mode:
+            final, state["last_good"], feedback, events = await _text_mode_step(text, state["last_good"], vision)
+            for e in events:
+                yield e
+            messages.append({"role": "assistant", "content": text or "(no response)"})
+            if final:
+                state["final"] = final
+                return
+            messages.append(feedback)
+            continue
+
+        if not calls:
+            if state["last_good"]:
+                state["final"] = {"code": state["last_good"]["code"], "title": "", "summary": text[:600]}
+                return
+            messages.append({"role": "assistant", "content": text or "(empty)"})
+            messages.append({"role": "user", "content": "Please write the OpenSCAD code and call check_design."})
+            continue
+
+        messages.append(
+            {
+                "role": "assistant",
+                "content": text or None,
+                "tool_calls": [
+                    {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
+                    for c in calls
+                ],
+            }
+        )
+        images: list[str] = []
+        for c in calls:
+            try:
+                args = json.loads(c.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            code = args.get("code", "")
+            name = c.function.name
+            yield {"type": "tool", "name": name}
+            if not code:
+                messages.append({"role": "tool", "tool_call_id": c.id, "content": "Error: 'code' is required."})
+                continue
+            yield {"type": "code", "code": code}
+            result_text, check, img = await _check(code, vision and name == "check_design")
+            for e in check["events"]:
+                yield e
+            if check["ok"]:
+                state["last_good"] = {"code": code, "stats": check["stats"]}
+            if name == "submit_design" and check["ok"]:
+                state["final"] = {"code": code, "title": args.get("title", ""), "summary": args.get("summary", ""), "tags": args.get("tags") or []}
+                return
+            if name == "submit_design":
+                result_text = "Not saved, fix these problems first.\n" + result_text
+            messages.append({"role": "tool", "tool_call_id": c.id, "content": result_text})
+            if img:
+                images.append(img)
+        if images:
+            content: list[dict[str, Any]] = [{"type": "text", "text": "Preview render (ISO, FRONT, RIGHT, TOP):"}]
+            content += [{"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b}"}} for b in images[-1:]]
+            messages.append({"role": "user", "content": content})
+    if state["final"] is None and state["last_good"]:
+        state["final"] = {"code": state["last_good"]["code"], "title": "", "summary": "Stopped at the step limit; saved the last design that rendered."}
 
 
 async def _check(code: str, want_image: bool) -> tuple[str, dict[str, Any], str | None]:
