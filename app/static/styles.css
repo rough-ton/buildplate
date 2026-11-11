@@ -288,15 +288,16 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
 
 /* ---------- library ---------- */
 .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
-.lib-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; text-decoration: none; color: inherit; }
+.lib-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; text-decoration: none; color: inherit; }
 .lib-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow); }
-.lib-thumb { aspect-ratio: 4 / 3; background: var(--viewer-bg); display: grid; place-items: center; }
-.lib-thumb img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.lib-thumb { aspect-ratio: 4 / 3; background: var(--viewer-bg); display: grid; place-items: center; border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }
+.lib-thumb img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; border-radius: inherit; }
 @media (prefers-color-scheme: dark) { .lib-thumb img { mix-blend-mode: normal; filter: brightness(.92); } }
 .lib-info { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
-.lib-info h3 { margin: 0; font-size: 14.5px; font-weight: 600; }
+/* Two lines at most, and always two lines tall, so the rows below line up across cards. */
+.lib-info h3 { margin: 0; font-size: 14.5px; font-weight: 600; line-height: 1.35; height: calc(2 * 1.35em); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .lib-info .meta { color: var(--ink-3); font-size: 12.5px; }
-.made-by { display: flex; gap: 4px; min-width: 0; }
+.made-by { display: flex; gap: 4px; min-width: 0; height: 22px; }
 .made-by-pill { min-width: 0; max-width: 100%; }
 .made-by-label { overflow: hidden; text-overflow: ellipsis; }
 .made-by-pill.agent { background: var(--panel); color: var(--ink-2); }
@@ -588,3 +589,20 @@ dialog.pp.part-dialog { width: min(640px, calc(100vw - 32px)); height: fit-conte
 .chatgpt-btn:hover { background: #222; color: #fff; filter: none; }
 .chatgpt-steps p { margin: 12px 0 8px; }
 .chatgpt-steps textarea { width: 100%; }
+
+/* Library cards: a tag row is always reserved (one line), the footer sits at the bottom. */
+.lib-tags { display: flex; flex-wrap: nowrap; height: 22px; overflow: hidden; min-width: 0; }
+.lib-tags .tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lib-tags .pill { flex: none; }
+.lib-foot { margin-top: auto; flex-wrap: nowrap; min-height: 28px; }
+
+/* 3-dot menus (kebabMenu in app.js). They open upwards, over the card they belong to. */
+.btn-icon { width: 28px; padding: 0; justify-content: center; }
+.menu-wrap { position: relative; flex: none; }
+.menu { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 20; min-width: 176px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.menu[hidden] { display: none; }
+.menu-item { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; white-space: nowrap; }
+.menu-item:hover, .menu-item:focus-visible { background: var(--sunken); outline: none; }
+.menu-item.danger { color: var(--bad); }
+.menu-item svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.menu-sep { height: 1px; margin: 4px 2px; background: var(--line); }

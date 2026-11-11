@@ -77,7 +77,57 @@ const icons = {
   play: '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>',
   save: '<svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z M8 4v5h7V4 M8 20v-6h8v6"/></svg>',
   attach: '<svg viewBox="0 0 24 24"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>',
+  more: '<svg viewBox="0 0 24 24"><path d="M12 5.5v.01 M12 12v.01 M12 18.5v.01" stroke-width="3.2"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M5 7h14 M10 7V4.5h4V7 M7 7l1 13h8l1-13 M10.5 11v5 M13.5 11v5"/></svg>',
 };
+
+// A 3-dot (kebab) button with a small menu of actions: [{label, icon, danger, onSelect}],
+// null for a divider. Only one menu is open at a time; it closes on Escape, on a click
+// elsewhere, or after an action. Arrow keys move between items.
+let openMenu = null;
+function closeMenu(focusButton = false) {
+  if (!openMenu) return;
+  const { menu, button } = openMenu;
+  openMenu = null;
+  menu.hidden = true;
+  button.setAttribute("aria-expanded", "false");
+  if (focusButton) button.focus();
+}
+document.addEventListener("click", (e) => { if (openMenu && !openMenu.wrap.contains(e.target)) closeMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openMenu) closeMenu(true); });
+window.addEventListener("hashchange", () => closeMenu());
+
+function kebabMenu(label, items) {
+  const menu = h("div", { class: "menu", role: "menu", hidden: true });
+  const button = h("button", { class: "btn btn-ghost btn-sm btn-icon", type: "button", title: label, "aria-label": label, "aria-haspopup": "menu", "aria-expanded": "false", html: icons.more });
+  const wrap = h("div", { class: "menu-wrap" }, button, menu);
+  for (const it of items) {
+    if (!it) { menu.append(h("div", { class: "menu-sep", role: "separator" })); continue; }
+    menu.append(h("button", { class: `menu-item${it.danger ? " danger" : ""}`, type: "button", role: "menuitem", tabindex: "-1", html: (it.icon || "") + esc(it.label),
+      onclick: (e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); it.onSelect(); } }));
+  }
+  const entries = () => $$(".menu-item", menu);
+  // The menu lives inside a link card: keep clicks from following the link.
+  wrap.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); });
+  button.addEventListener("click", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (openMenu?.menu === menu) return closeMenu();
+    closeMenu();
+    menu.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    openMenu = { menu, button, wrap };
+    entries()[0]?.focus();
+  });
+  menu.addEventListener("keydown", (e) => {
+    const list = entries();
+    const i = list.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      list[(i + (e.key === "ArrowDown" ? 1 : -1) + list.length) % list.length].focus();
+    } else if (e.key === "Tab") closeMenu();
+  });
+  return wrap;
+}
 
 // Reference files a Studio request can carry (see app/reference.py).
 const REFERENCE_ACCEPT = ".png,.jpg,.jpeg,.webp,.stl,.3mf,.scad,.gcode,.gco,.g";
@@ -1446,30 +1496,43 @@ async function Library(root) {
       const st = d.stats || {};
       const by = madeBy(d);
       const others = (d.models || []).filter((m) => !(m.provider === d.provider && m.model === d.model));
+      const download = (fmt) => { location.href = `/api/designs/${d.id}/download?format=${fmt}&version=${d.current_version}`; };
+      const shownTags = (d.tags || []).slice(0, 3);
+      const moreTags = (d.tags || []).slice(3);
+      const updated = new Date(d.updated_at * 1000);
+      // Every row has a fixed height (title clamped to two lines, tags always reserved)
+      // so pills, tags and the bottom row line up across the grid.
       const card = h("a", { class: "lib-card", href: `#/studio/${d.id}` },
         h("div", { class: "lib-thumb" }, h("img", { src: `/api/designs/${d.id}/download?format=png&version=${d.current_version}`, alt: "", loading: "lazy" })),
         h("div", { class: "lib-info" },
-          h("h3", {}, d.title),
-          h("div", { class: "meta" }, `v${d.current_version}, ${ago(d.updated_at)}`),
+          h("h3", { title: d.title }, d.title),
+          h("div", { class: "meta", title: `Last modified ${updated.toLocaleString()}` }, `Updated ${ago(d.updated_at)}`),
           h("div", { class: "made-by" },
             h("span", { class: `pill made-by-pill ${by.kind}`, title: by.title }, h("span", { class: "made-by-label" }, by.label)),
             others.length ? h("span", { class: "pill", title: `Earlier versions also used:\n${others.map((m) => `${providerName(m.provider) || "External"} \u00b7 ${m.model}`).join("\n")}` }, `+${others.length}`) : null),
-          d.tags?.length ? h("div", { class: "tag-list" }, ...d.tags.map((t) => h("button", { class: `tag tag-link${f.tags.includes(t) ? " on" : ""}`, title: `Show designs tagged ${t}`, onclick: (e) => {
+          h("div", { class: "tag-list lib-tags" }, ...shownTags.map((t) => h("button", { class: `tag tag-link${f.tags.includes(t) ? " on" : ""}`, title: `Show designs tagged ${t}`, onclick: (e) => {
             e.preventDefault();
             if (!f.tags.includes(t)) { f.tags.push(t); sync(); }
-          } }, t))) : null,
-          h("div", { class: "row" },
+          } }, t)), moreTags.length ? h("span", { class: "pill", title: `Also tagged: ${moreTags.join(", ")}` }, `+${moreTags.length}`) : null),
+          h("div", { class: "row lib-foot" },
             st.size_mm ? h("span", { class: "pill tabular" }, `${st.size_mm.map((n) => Math.round(n)).join(" x ")} mm`) : null,
             d.hardware ? h("span", { class: `pill ${d.hardware.to_buy ? "warn" : ""}`, title: `${d.hardware.parts} hardware parts${d.hardware.to_buy ? `; ${d.hardware.to_buy} kind${d.hardware.to_buy === 1 ? "" : "s"} to buy` : ", all on hand"}` },
               `${d.hardware.parts} part${d.hardware.parts === 1 ? "" : "s"}${d.hardware.to_buy ? `, ${d.hardware.to_buy} to buy` : ""}`) : null,
             h("span", { class: "spacer" }),
-            h("button", { class: "btn btn-ghost btn-sm btn-danger", title: "Delete design", onclick: async (e) => {
-              e.preventDefault();
-              if (!confirm(`Delete "${d.title}" and all its versions?`)) return;
-              await api(`/api/designs/${d.id}`, { method: "DELETE" });
-              toast("Design deleted");
-              sync();
-            } }, "Delete"))));
+            kebabMenu(`Actions for ${d.title}`, [
+              { label: "Download STL", icon: icons.download, onSelect: () => download("stl") },
+              { label: "Download 3MF", icon: icons.download, onSelect: () => download("3mf") },
+              { label: "Download SCAD", icon: icons.download, onSelect: () => download("scad") },
+              null,
+              { label: "Delete", icon: icons.trash, danger: true, onSelect: async () => {
+                if (!confirm(`Delete "${d.title}" and all its versions?`)) return;
+                try {
+                  await api(`/api/designs/${d.id}`, { method: "DELETE" });
+                  toast("Design deleted");
+                  sync();
+                } catch (err) { toast(err.message, "bad"); }
+              } },
+            ]))));
       grid.append(card);
     }
   }
