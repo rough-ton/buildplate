@@ -138,6 +138,8 @@ Each version records the printer it was checked against, shown in the **History*
 
 The grid matches your printer profile, with fine lines every 10 mm and bold lines every 50 mm. Delta printers get a round plate. Arrows from the center of the plate show the axes in the usual slicer colors: X in red and Y in green, running out to the plate edge so they still show past a part, and Z in blue, pointing up. Parts are shown centered on the plate and resting on its surface, the way a slicer places them, so a design does not need `center=true` to preview well. Downloads keep the design's own OpenSCAD coordinates.
 
+The plate size is shown in the bottom-left corner of the viewer, for example `256 × 256 mm`, or `⌀220 mm` for a round plate. It changes when you switch printers.
+
 ## Exporting
 
 The buttons at the bottom of the inspector download:
