@@ -243,8 +243,10 @@ label { display: block; font-weight: 500; margin-bottom: 4px; }
 .viewer canvas { display: block; width: 100% !important; height: 100% !important; }
 .viewer-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--ink-3); pointer-events: none; padding: 24px; }
 .viewer-empty strong { display: block; color: var(--ink-2); font-size: 15px; margin-bottom: 4px; }
-.readout { position: absolute; left: 14px; bottom: 14px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 28px); }
+.readout { position: absolute; left: 14px; bottom: 38px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 28px); }
 .readout .pill { background: var(--panel); }
+/* Plate size under the readout, in the bottom-left corner of the viewer. */
+.bed-size { position: absolute; left: 14px; bottom: 14px; z-index: 2; font-size: 12px; font-weight: 500; color: var(--ink-2); pointer-events: none; user-select: none; }
 .busy-veil { position: absolute; right: 14px; bottom: 14px; z-index: 2; }
 .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); overflow: hidden; background: var(--panel); }
 .seg button { border: 0; background: transparent; height: 28px; padding: 0 10px; cursor: pointer; font-size: 12.5px; color: var(--ink-2); }

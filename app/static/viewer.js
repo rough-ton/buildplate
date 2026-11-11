@@ -56,6 +56,11 @@ export class Viewer {
     this.edges = null;
     this.wire = false;
     this.loader = new STLLoader();
+    // Plate size in the bottom-left corner, like a printer's own display.
+    this.bedLabel = document.createElement("div");
+    this.bedLabel.className = "bed-size tabular";
+    el.appendChild(this.bedLabel);
+    this.showBedSize();
     this._ro = new ResizeObserver(() => this.resize());
     this._ro.observe(el);
     this._mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -75,7 +80,15 @@ export class Viewer {
   setBed(x, y, shape = "rect") {
     if (x === this.bed.x && y === this.bed.y && shape === this.bed.shape) return;
     this.bed = { x, y: shape === "round" ? x : y, shape };
+    this.showBedSize();
     this.buildPlate();
+  }
+
+  showBedSize() {
+    const { x, y, shape } = this.bed;
+    const text = shape === "round" ? `⌀${+x} mm` : `${+x} × ${+y} mm`;
+    this.bedLabel.textContent = text;
+    this.bedLabel.title = shape === "round" ? `Build plate: ${+x} mm across` : `Build plate: ${+x} mm (X) by ${+y} mm (Y)`;
   }
 
   buildPlate() {
@@ -243,5 +256,6 @@ export class Viewer {
     this.controls.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+    this.bedLabel.remove();
   }
 }
