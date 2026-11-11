@@ -583,6 +583,13 @@ dialog.pp.term { width: min(900px, calc(100vw - 32px)); height: fit-content; max
 .catalog-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .pp-vendor.on { background: var(--panel); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
 dialog.pp.part-dialog { width: min(640px, calc(100vw - 32px)); height: fit-content; max-height: calc(100vh - 32px); }
+/* Parts catalog sources (Settings > Parts and shopping, Add from catalog). */
+.sources { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+.source-card { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; background: var(--panel); }
+.source-card .row { align-items: flex-start; flex-wrap: nowrap; }
+.source-pill { margin-left: 6px; height: 18px; padding: 0 6px; font-size: 11px; vertical-align: 1px; }
+.catalog-search { flex-wrap: nowrap; gap: 6px; }
+.catalog-search input { min-width: 0; flex: 1; }
 @media (max-width: 820px) {
   .catalog-row { grid-template-columns: minmax(0, 1fr) auto; } .catalog-row .qty-input { grid-row: 2; }
   .parts-table th:nth-child(2), .parts-table td:nth-child(2) { display: none; }

@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
-from . import agent, auth, auth_methods, claude_code, claude_runtime, config, connections, db, openscad, parts, printers, search, terminal
+from . import agent, auth, auth_methods, claude_code, claude_runtime, config, connections, db, mcmaster, openscad, parts, printers, search, terminal
 from . import reference as references
 from .mcp_server import mcp
 from .settings import public_connection, store
@@ -109,6 +109,21 @@ class PartBody(BaseModel):
     notes: str | None = None
     dims: dict[str, Any] | None = None
     holes: dict[str, Any] | None = None
+    source: str | None = None  # "bambu" with source_ref = a Bambu Lab Store product link
+    source_ref: str | None = None
+
+
+class LookupBody(BaseModel):
+    query: str = Field(max_length=300)
+
+
+class McMasterBody(BaseModel):
+    """A McMaster-Carr API login. Secrets left out keep their saved value."""
+    username: str = Field(max_length=120)
+    password: str | None = Field(default=None, max_length=200)
+    certificate: str | None = Field(default=None, max_length=200_000)  # base64 .pfx / .p12
+    certificate_password: str | None = Field(default=None, max_length=200)
+    enabled: bool = True
 
 
 class AdjustBody(BaseModel):
@@ -730,7 +745,47 @@ async def list_parts(q: str = "", category: str = ""):
 
 @app.get("/api/parts/catalog")
 async def parts_catalog():
-    return parts.catalog()
+    """Catalog parts from the enabled sources, tagged with their source."""
+    return parts.catalog_view()
+
+
+@app.post("/api/parts/lookup")
+async def parts_lookup(body: LookupBody):
+    """Direct entry: a part number, product link, catalog key or name."""
+    try:
+        return await parts.lookup(body.query)
+    except parts.PartsError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.put("/api/parts/sources/mcmaster")
+async def set_mcmaster(body: McMasterBody, request: Request):
+    """Save a McMaster-Carr API login after checking it with McMaster-Carr, and turn the
+    source on (or off with enabled=false)."""
+    if not auth.admin_allowed(request):
+        raise HTTPException(403, auth.ADMIN_REQUIRED)
+    saved = store.get()["parts"]["mcmaster"]
+    old = saved.get("secrets") or {} if saved.get("username") == body.username.strip() else {}
+    secrets_ = {k: (getattr(body, k) if getattr(body, k) is not None else old.get(k, ""))
+                for k in ("password", "certificate", "certificate_password")}
+    creds = {"username": body.username.strip(), **secrets_}
+    try:
+        await mcmaster.test(creds)
+    except mcmaster.McMasterError as exc:
+        raise HTTPException(400, str(exc))
+    store.set_mcmaster(creds["username"], secrets_, enabled=body.enabled)
+    return store.public()["parts"]
+
+
+@app.delete("/api/parts/sources/mcmaster")
+async def remove_mcmaster(request: Request):
+    """Forget the McMaster-Carr login and turn the source off. Parts already added keep
+    their part numbers and links."""
+    if not auth.admin_allowed(request):
+        raise HTTPException(403, auth.ADMIN_REQUIRED)
+    mcmaster.forget_login()
+    store.set_mcmaster("", None, enabled=False)
+    return store.public()["parts"]
 
 
 @app.post("/api/parts")

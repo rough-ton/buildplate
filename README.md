@@ -49,7 +49,8 @@ model, or your Claude, ChatGPT or Copilot plan.
   pick, including round beds for deltas.
 - **Hardware-aware designs.** Keep an inventory of the screws, inserts, magnets and bearings you
   have. The agent designs around them, or picks standard parts and gives you a parts list with
-  buy links, or avoids hardware entirely. Hole and pocket sizes come from a built-in catalog.
+  buy links, or avoids hardware entirely. Parts come from Bambu's Maker Supply (built in, with hole
+  and pocket sizes) and, if you have McMaster-Carr API access, McMaster-Carr part numbers.
 - **Live parameters.** Customizer variables become sliders. Drag one and the part
   re-renders in seconds without spending a token.
 - **Library and search.** Every generation and edit is a version you can reopen and
