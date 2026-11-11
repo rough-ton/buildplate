@@ -25,6 +25,10 @@
   --grid-major: #B7C1CB;
   --grid-minor: #CDD5DD;
   --part: #3C6E9E;
+  /* Build plate axes: X red, Y green, Z blue, as in slicers. */
+  --axis-x: #D0453A;
+  --axis-y: #2E9A4A;
+  --axis-z: #2F6BE0;
   --radius-sm: 6px;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(28, 36, 48, .06), 0 4px 16px rgba(28, 36, 48, .05);
@@ -69,6 +73,9 @@
     --grid-major: #36404B;
     --grid-minor: #252C35;
     --part: #6FA3D6;
+    --axis-x: #F0675B;
+    --axis-y: #4FC46E;
+    --axis-z: #5B8FF5;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
     --pi-frame: #0F1318;
     --pi-frame2: #2A323C;
