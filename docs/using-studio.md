@@ -91,7 +91,7 @@ The **Checks** tab shows the size, volume, an estimated PLA weight, whether the 
 
 ## History
 
-Every generation and every saved edit is a version. Each version shows what made it: the provider and model for AI generations, **Manual edit** for code you saved yourself, or the MCP client and model for designs saved from an external app. Open one from the **History** tab to load its code and model. Saving after that creates a new version; nothing is overwritten.
+Every generation and every saved edit is a version. Each version shows what made it: the provider and model for AI generations, **Manual edit** for code you saved yourself, or the MCP client and model for designs saved from an external app. Open one from the **History** tab to load its code and model. The readout under the part shows who made the version on the plate, next to its size and filament estimate. Saving after that creates a new version; nothing is overwritten.
 
 ## Hardware
 
