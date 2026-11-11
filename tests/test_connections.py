@@ -255,3 +255,22 @@ def test_agent_run_uses_connection_and_records_it(env, monkeypatch):
 
     asyncio.run(missing())
     assert events == [{"type": "error", "message": "That AI connection no longer exists. Pick another model."}]
+
+
+def test_note_resolved_alias(env):
+    """Issue #27: the model an alias resolved to is kept per connection and sent to the
+    browser, so the picker can show "sonnet (claude-sonnet-5-5)"."""
+    c = env.connections
+    a = c.create("anthropic.api_key", "Work key", {"api_key": "sk-ant-work-0001"})
+    c.note_resolved(a["id"], "sonnet", "claude-sonnet-5-5")
+    c.note_resolved(a["id"], "opus", "claude-opus-5-5")
+    c.note_resolved(a["id"], "sonnet", "claude-sonnet-5-6")  # alias moved to a newer release
+    c.note_resolved(a["id"], "claude-haiku-5-5", "claude-haiku-5-5")  # not an alias: ignored
+    c.note_resolved(a["id"], "", "x")
+    c.note_resolved("c_missing", "sonnet", "claude-sonnet-5-5")  # unknown connection: no error
+    assert c.get(a["id"])["resolved"] == {"sonnet": "claude-sonnet-5-6", "opus": "claude-opus-5-5"}
+    pub = next(x for x in c.public_list() if x["id"] == a["id"])
+    assert pub["resolved"] == {"sonnet": "claude-sonnet-5-6", "opus": "claude-opus-5-5"}
+    # kept when the connection is edited later
+    c.update(a["id"], label="Renamed")
+    assert c.get(a["id"])["resolved"]["opus"] == "claude-opus-5-5"

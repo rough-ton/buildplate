@@ -1,6 +1,6 @@
 # AI connections
 
-Buildplate talks to models through [LiteLLM](https://github.com/BerriAI/litellm), so one design agent works with many providers. Each way you reach a model is a **connection**: an API key, a local server, or a hosted OpenAI-compatible service. You can add as many as you like, including several for one provider (for example a work key and a personal key), set one as the default, and choose a different model for any single request from the picker under the Studio prompt.
+Buildplate talks to models through [LiteLLM](https://github.com/BerriAI/litellm), so one design agent works with many providers. Each way you reach a model is a **connection**: an API key, a local server, or a hosted OpenAI-compatible service. You can add as many as you like, including several for one provider (for example a work key and a personal key), set one as the default, and choose a different model for any single request from the picker under the Studio prompt. Studio remembers the model you last picked or used there, including after you leave Studio or start a new design; the default applies until you pick one.
 
 Connections live in **Settings > AI connections** and take effect immediately.
 
@@ -56,7 +56,7 @@ The **Claude plan (Claude Code)** connection uses your Claude Pro, Max, Team or 
 3. A terminal opens running Claude Code's sign-in. Open the link it shows, sign in to your Claude account and approve access, then copy the code the page shows and paste it into the terminal (or the box under it) and press Enter.
 4. When it says the sign-in worked, close the terminal. The card shows **Connected** and the plan type.
 
-Pick `sonnet`, `opus`, `haiku` or `fable` from the model picker. Claude Code resolves each to the newest model of that tier; Usage records the exact model. You can also type a full model ID.
+Pick `sonnet`, `opus`, `haiku` or `fable` from the model picker. Claude Code resolves each to the newest model of that tier; Usage records the exact model. After a request has used an alias, pickers show the model it resolved to next to it, for example `sonnet (claude-sonnet-5-5)`, so you can tell which release you are on. You can also type a full model ID.
 
 How it works and what it can do:
 
