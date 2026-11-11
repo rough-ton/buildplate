@@ -153,6 +153,21 @@ def set_plan_limit(cid: str, info: dict[str, Any]) -> None:
     store.set_connections(conns)
 
 
+def note_resolved(cid: str, alias: str, model: str) -> None:
+    """Remember which model an alias (Claude Code's "sonnet", "opus", ...) resolved to on
+    the latest request, so pickers can show it next to the alias. Several releases can
+    sit behind one alias, and what it points to changes as Claude Code is updated."""
+    alias, model = str(alias or "").strip()[:120], str(model or "").strip()[:120]
+    if not alias or not model or alias == model:
+        return
+    conns = all_()
+    for c in conns:
+        if c["id"] == cid and (c.get("resolved") or {}).get(alias) != model:
+            c["resolved"] = {**(c.get("resolved") or {}), alias: model}
+            store.set_connections(conns)
+            return
+
+
 async def test(cid: str) -> list[str]:
     """Check a connection by listing its models (for Claude Code, by asking the CLI
     whether it is signed in). Saves the models and the status."""

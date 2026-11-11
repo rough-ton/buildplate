@@ -27,7 +27,7 @@ from typing import Any, AsyncIterator
 
 from mcp.server.mcpserver import Context, Image, MCPServer
 
-from . import claude_code, config, db, providers
+from . import claude_code, config, connections, db, providers
 from . import parts as parts_lib
 
 SERVER_NAME = "buildplate"
@@ -338,6 +338,10 @@ async def design_loop(
                 resolved_model = ev.get("model") or model
                 if resolved_model != model:
                     db.set_run_model(run_id, resolved_model)
+                    try:
+                        connections.note_resolved(connection_id, model, resolved_model)
+                    except Exception:  # only a label in the model picker; never fail the run
+                        pass
                 await run.queue.put({"type": "status", "message": f"Claude Code is working ({resolved_model})"})
             elif kind == "stream_event":
                 e = ev.get("event") or {}
