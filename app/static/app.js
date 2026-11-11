@@ -644,6 +644,13 @@ async function Studio(root, [designId]) {
     readout.append(h("span", { class: "pill tabular" }, `${st.size_mm.map((n) => +n.toFixed(1)).join(" x ")} mm`));
     if (st.est_filament_g_pla != null) readout.append(h("span", { class: "pill tabular" }, `${st.est_filament_g_pla} g PLA`));
     readout.append(st.issues?.length ? h("span", { class: "pill warn" }, `${st.issues.length} check${st.issues.length > 1 ? "s" : ""} to review`) : h("span", { class: "pill good" }, "Printable"));
+    // Who made the version on the plate, labelled as in the Library and History.
+    // Skipped while the code has unsaved edits, since then no saved version is shown.
+    const v = s.designId && s.code === s.savedCode ? s.versions.find((x) => x.version === s.version) : null;
+    if (v) {
+      const by = madeBy(v);
+      readout.append(h("span", { class: `pill made-by-pill ${by.kind}`, title: by.title }, h("span", { class: "made-by-label" }, by.label)));
+    }
   }
 
   async function runCode() {
@@ -920,6 +927,7 @@ async function Studio(root, [designId]) {
       if (d.messages.length) chat.prepend(h("p", { class: "hint", style: "text-align:center" }, `${d.versions.length} version${d.versions.length === 1 ? "" : "s"}, last updated ${ago(d.updated_at)}`));
     }
     renderTab();
+    showReadout(); // a saved edit becomes a version: show who made it
   }
 
   // ---- boot
