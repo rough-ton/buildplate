@@ -209,19 +209,19 @@ async def get_design(design_id: str, version: int | None = None) -> dict[str, An
 
 @mcp.tool(description=(
     "List the user's parts inventory (screws, inserts, nuts, magnets, bearings...) with quantities, hole sizes and "
-    "buy links, optionally filtered by words or category. Set include_catalog to also search the hardware catalog."
+    "buy links, optionally filtered by words or category. Set include_catalog to also search the parts catalogs the "
+    "user has turned on (Bambu's Maker Supply, and McMaster-Carr parts already looked up)."
 ))
 async def list_parts(query: str = "", category: str = "", include_catalog: bool = False) -> dict[str, Any]:
     inv = parts.list_inventory(query, category)
     out: dict[str, Any] = {"inventory": [
-        {k: p[k] for k in ("id", "catalog_key", "category", "name", "size", "type", "quantity", "low", "holes", "links")} for p in inv
+        {k: p[k] for k in ("id", "catalog_key", "source", "source_ref", "category", "name", "size", "type", "quantity", "low",
+                            "holes", "links")} for p in inv
     ]}
     if include_catalog:
-        words = query.lower().split()
         out["catalog"] = [
-            {k: p[k] for k in ("key", "category", "name", "size", "type", "holes")}
-            for p in parts.catalog()["parts"]
-            if (not category or p["category"] == category) and all(w in f"{p['name']} {p['size']} {p['type']}".lower() for w in words)
+            {k: p.get(k, "") for k in ("key", "source", "source_ref", "category", "name", "size", "type", "holes")}
+            for p in parts.search_catalog(query, category)
         ][:50]
     return out
 

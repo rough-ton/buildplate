@@ -15,7 +15,7 @@ The endpoint uses the Streamable HTTP transport.
 | `list_designs` | Searches saved designs by title, description, tags, prompt, provider and model, with filters for tags, provider, model, source, printer, size and date. Accepts the same [search syntax](using-studio.md#library-and-search) as the Library |
 | `set_design_tags` | Replaces the tags on a saved design |
 | `get_design` | Returns the code, tags, stats, bill of materials and `generated_by` (origin, provider, model, client) of a saved design |
-| `list_parts` | Lists the parts inventory (and optionally the catalog) with hole sizes and buy links |
+| `list_parts` | Lists the parts inventory (and optionally the enabled catalogs: Bambu's Maker Supply, and McMaster-Carr parts already looked up) with sources, hole sizes and buy links |
 | `add_part` | Adds a catalog or custom part to the inventory |
 | `update_part_quantity` | Sets or changes a part's quantity on hand |
 | `get_parameters` | Extracts Customizer parameters from code |

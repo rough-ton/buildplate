@@ -514,9 +514,7 @@ async function Studio(root, [designId]) {
       list.append(h("div", { class: "bom-row" },
         h("div", { class: "bom-qty tabular" }, `${p.quantity}x`),
         h("div", { class: "bom-name" }, h("div", {}, p.name), p.use ? h("div", { class: "hint", style: "margin:0" }, p.use) : null,
-          p.status !== "have" ? h("div", { class: "bom-links" }, h("a", { href: p.links.bambu, target: "_blank", rel: "noopener noreferrer" }, "Bambu Lab Store"),
-            h("a", { href: p.links.amazon, target: "_blank", rel: "noopener noreferrer sponsored" }, "Amazon"),
-            p.links.other ? h("a", { href: p.links.other, target: "_blank", rel: "noopener noreferrer" }, "My link") : null) : null),
+          p.status !== "have" ? h("div", {}, buyLinks(p, true)) : null),
         status));
     }
     wrap.append(list);
@@ -1233,12 +1231,13 @@ async function installClaudeCode(statusEl) {
 const HARDWARE_MODES = { ask: "Ask me", inventory: "Use parts I have", order: "Buy parts as needed", none: "No hardware" };
 const AMAZON_SITES = ["amazon.com", "amazon.ca", "amazon.co.uk", "amazon.de", "amazon.fr", "amazon.it", "amazon.es", "amazon.nl", "amazon.se", "amazon.pl", "amazon.com.au", "amazon.co.jp", "amazon.in", "amazon.com.mx", "amazon.com.br"];
 
-function buyLinks(p) {
-  return h("span", { class: "bom-links" },
-    h("a", { href: p.links.bambu, target: "_blank", rel: "noopener noreferrer" }, "Bambu"),
-    h("a", { href: p.links.amazon, target: "_blank", rel: "noopener noreferrer sponsored" }, "Amazon"),
-    p.links.other ? h("a", { href: p.links.other, target: "_blank", rel: "noopener noreferrer" }, "My link") : null);
+// Buy links follow where a part came from (see links() in app/parts.py).
+const BUY_LINKS = [["mcmaster", "McMaster-Carr", "McMaster"], ["bambu", "Bambu Lab Store", "Bambu"], ["amazon", "Amazon", "Amazon"], ["other", "My link", "My link"]];
+function buyLinks(p, long = false) {
+  return h("span", { class: "bom-links" }, ...BUY_LINKS.filter(([k]) => p.links?.[k]).map(([k, full, short]) =>
+    h("a", { href: p.links[k], target: "_blank", rel: `noopener noreferrer${k === "amazon" ? " sponsored" : ""}` }, long ? full : short)));
 }
+const PART_SOURCE_LABELS = { bambu: "Bambu's Maker Supply", mcmaster: "McMaster-Carr", custom: "Custom" };
 
 async function Parts(root) {
   let filter = { q: "", category: "", low: false };
@@ -1280,7 +1279,8 @@ async function Parts(root) {
       qty.addEventListener("change", async () => { try { await api(`/api/parts/${p.id}`, { method: "PATCH", json: { quantity: Number(qty.value || 0) } }); load(); } catch (err) { toast(err.message, "bad"); } });
       const step = (d) => async () => { await api(`/api/parts/${p.id}/adjust`, { method: "POST", json: { delta: d } }); load(); };
       tbody.append(h("tr", { class: p.low ? "low" : "" },
-        h("td", {}, h("div", {}, p.name), h("div", { class: "hint", style: "margin:0" }, [p.type, p.material].filter(Boolean).join(", "))),
+        h("td", {}, h("div", {}, p.name), h("div", { class: "hint", style: "margin:0" },
+          [p.source !== "custom" ? PART_SOURCE_LABELS[p.source] : null, p.source === "mcmaster" ? p.source_ref : null, p.type, p.material].filter(Boolean).join(", "))),
         h("td", {}, p.category),
         h("td", {}, h("div", { class: "qty" },
           h("button", { class: "btn btn-sm btn-ghost", "aria-label": `One fewer ${p.name}`, onclick: step(-1) }, "\u2212"), qty,
@@ -1293,46 +1293,105 @@ async function Parts(root) {
       h("table", { class: "data parts-table" }, h("thead", {}, h("tr", {}, h("th", {}, "Part"), h("th", {}, "Category"), h("th", {}, "On hand"), h("th", {}, "Buy"), h("th", {}))), tbody))));
   }
 
-  // Pick parts from the catalog and enter how many you have.
-  function openCatalog() {
-    let cat = "screw";
-    const q = h("input", { type: "search", placeholder: `Search ${catalog.parts.length} parts`, "aria-label": "Search the catalog" });
+  // Pick parts from the enabled catalog sources and enter how many you have. Search
+  // filters the parts listed; a part number, product link or name can also be looked
+  // up directly (McMaster-Carr parts are only found that way).
+  async function openCatalog() {
+    let cat;
+    try { cat = await api("/api/parts/catalog"); } catch (err) { toast(err.message, "bad"); return; }
+    const sources = cat.sources.filter((x) => x.enabled);
+    const multi = sources.length > 1;
+    let category = cat.categories.includes("screw") ? "screw" : cat.categories[0];
+    let only = "";  // "" = every enabled source
+    let looked = null;  // {query, parts, message, search_url} from a lookup
+    const q = h("input", { type: "search", placeholder: sources.some((x) => x.id === "mcmaster") ? "Search, or paste a part number or link" : "Search, or paste a Bambu Lab Store link", "aria-label": "Search the catalog, or look up a part" });
+    const lookBtn = h("button", { class: "btn", type: "button" }, "Look up");
+    const srcSeg = multi ? h("div", { class: "seg", role: "group", "aria-label": "Catalog source" },
+      ...[["", "All"], ...sources.map((x) => [x.id, x.label])].map(([id, label]) => h("button", { type: "button", "data-src": id, class: id === only ? "on" : "" }, label))) : null;
     const cats = h("div", { class: "pp-vendors", role: "listbox", "aria-label": "Categories" });
     const list = h("div", { class: "catalog-list" });
     const close = h("button", { class: "btn" }, "Done");
+    const intro = !sources.length ? "No parts catalog is turned on. Turn one on in Settings > Parts and shopping, or add a custom part."
+      : "Enter how many you have and select Add. Hole sizes for each part are included for the design agent.";
     const dialog = h("dialog", { class: "pp", "aria-label": "Add parts from the catalog" },
-      h("div", { class: "pp-head" }, h("div", {}, h("h2", {}, "Add parts"), h("p", {}, "Enter how many you have and select Add. Hole sizes for each part are included for the design agent.")), q),
-      h("div", { class: "pp-body" }, cats, list),
-      h("div", { class: "pp-foot" }, h("span", { class: "hint", style: "margin:0" }, "Missing something? Close this and add a custom part."), h("span", { class: "spacer" }), close));
+      h("div", { class: "pp-head" }, h("div", {}, h("h2", {}, "Add parts"), h("p", {}, intro)),
+        sources.length ? h("div", { class: "row catalog-search" }, q, lookBtn) : null, srcSeg),
+      sources.length ? h("div", { class: "pp-body" }, cats, list) : null,
+      h("div", { class: "pp-foot" }, h("span", { class: "hint", style: "margin:0" }, "Missing something? ",
+        h("a", { href: "#", onclick: (e) => { e.preventDefault(); dialog.close(); editPart(null); } }, "Add a custom part"), "."), h("span", { class: "spacer" }), close));
     document.body.append(dialog);
+    const inSource = (x) => !only || x.source === only;
+    const row = (x) => {
+      const n = h("input", { type: "number", min: 1, value: x.category === "screw" ? 20 : 10, class: "qty-input", "aria-label": `How many ${x.name}` });
+      const add = h("button", { class: "btn btn-sm" }, "Add");
+      add.addEventListener("click", async () => {
+        const body = x.link_only
+          ? { source: x.source, source_ref: x.source_ref, name: x.name, category: x.category, quantity: Number(n.value || 0) }
+          : { catalog_key: x.key, quantity: Number(n.value || 0) };
+        try {
+          const r = await api("/api/parts", { method: "POST", json: body });
+          add.textContent = `${r.quantity} on hand`; add.disabled = true; load();
+        } catch (err) { toast(err.message, "bad"); }
+      });
+      const holes = Object.entries(x.holes || {}).filter(([k]) => k !== "note").slice(0, 3).map(([k, v]) => `${k.replace(/_/g, " ").replace(/ d$/, " \u2300")} ${v}`).join(" \u00b7 ");
+      const detail = x.link_only ? "Bambu Lab Store product, added as it is (no hole sizes)"
+        : [x.source === "mcmaster" ? `Part ${x.source_ref}` : null, holes || (x.specs ? Object.values(x.specs).slice(0, 2).join(" \u00b7 ") : "")].filter(Boolean).join(" \u00b7 ");
+      return h("div", { class: "catalog-row" },
+        h("div", {}, h("div", {}, x.name, multi || x.link_only ? h("span", { class: "pill source-pill" }, PART_SOURCE_LABELS[x.source]) : null),
+          h("div", { class: "hint", style: "margin:0" }, detail)), n, add);
+    };
     const render = () => {
       cats.innerHTML = "";
-      for (const c of catalog.categories) {
-        cats.append(h("button", { class: `pp-vendor ${c === cat && !q.value ? "on" : ""}`, onclick: () => { cat = c; q.value = ""; render(); } },
-          h("span", {}, c[0].toUpperCase() + c.slice(1)), h("span", { class: "spacer" }), h("span", { class: "hint", style: "margin:0" }, catalog.parts.filter((p) => p.category === c).length)));
+      const shown = cat.parts.filter(inSource);
+      for (const c of cat.categories) {
+        const count = shown.filter((x) => x.category === c).length;
+        if (!count) continue;
+        cats.append(h("button", { class: `pp-vendor ${c === category && !q.value ? "on" : ""}`, onclick: () => { category = c; q.value = ""; looked = null; render(); } },
+          h("span", {}, c[0].toUpperCase() + c.slice(1)), h("span", { class: "spacer" }), h("span", { class: "hint", style: "margin:0" }, count)));
       }
       const words = q.value.toLowerCase().split(/\s+/).filter(Boolean);
-      const items = catalog.parts.filter((p) => words.length ? words.every((w) => `${p.name} ${p.size} ${p.type} ${p.category}`.toLowerCase().includes(w)) : p.category === cat);
+      const items = shown.filter((x) => words.length ? words.every((w) => `${x.name} ${x.size} ${x.type} ${x.category} ${x.source_ref || ""}`.toLowerCase().includes(w)) : x.category === category);
       list.innerHTML = "";
-      for (const p of items.slice(0, 200)) {
-        const n = h("input", { type: "number", min: 1, value: p.category === "screw" ? 20 : 10, class: "qty-input", "aria-label": `How many ${p.name}` });
-        const add = h("button", { class: "btn btn-sm" }, "Add");
-        add.addEventListener("click", async () => {
-          try {
-            const r = await api("/api/parts", { method: "POST", json: { catalog_key: p.key, quantity: Number(n.value || 0) } });
-            add.textContent = `${r.quantity} on hand`; add.disabled = true; load();
-          } catch (err) { toast(err.message, "bad"); }
-        });
-        const holes = Object.entries(p.holes).filter(([k]) => k !== "note").slice(0, 3).map(([k, v]) => `${k.replace(/_/g, " ").replace(/ d$/, " \u2300")} ${v}`).join(" \u00b7 ");
-        list.append(h("div", { class: "catalog-row" }, h("div", {}, h("div", {}, p.name), h("div", { class: "hint", style: "margin:0" }, holes)), n, add));
+      if (looked) {
+        list.append(h("p", { class: "h3" }, `Results for \u201c${looked.query}\u201d`));
+        for (const x of looked.parts) list.append(row(x));
+        if (looked.message || looked.search_url) list.append(h("p", { class: "hint" }, looked.message, " ",
+          looked.search_url ? h("a", { href: looked.search_url, target: "_blank", rel: "noopener noreferrer" }, "Search McMaster-Carr") : null));
+        list.append(h("p", { class: "h3", style: "margin-top:16px" }, "In the catalog"));
       }
-      if (!items.length) list.append(h("p", { class: "hint", style: "padding:16px" }, "No parts match."));
+      for (const x of items.slice(0, 200)) list.append(row(x));
+      if (!items.length) list.append(h("p", { class: "hint", style: "padding:16px" }, q.value
+        ? "No catalog parts match. Select Look up to find it by part number, link or name."
+        : sources.some((x) => x.id === "mcmaster") && only === "mcmaster" ? "No McMaster-Carr parts yet. Paste a part number or a mcmaster.com link and select Look up." : "No parts here."));
     };
-    q.addEventListener("input", debounce(render, 150));
+    async function lookup() {
+      const query = q.value.trim();
+      if (!query) return;
+      lookBtn.disabled = true; lookBtn.textContent = "Looking up...";
+      try {
+        const r = await api("/api/parts/lookup", { method: "POST", json: { query } });
+        looked = { query, ...r };
+        for (const x of r.parts) if (x.key && !cat.parts.some((y) => y.key === x.key)) cat.parts.unshift(x);
+        if (r.parts.some((x) => x.source === "mcmaster") && !cat.categories.includes(r.parts[0].category)) cat.categories.push(r.parts[0].category);
+        render();
+      } catch (err) { toast(err.message, "bad"); } finally { lookBtn.disabled = false; lookBtn.textContent = "Look up"; }
+    }
+    q.addEventListener("input", debounce(() => { looked = null; render(); }, 150));
+    q.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); lookup(); } });
+    lookBtn.addEventListener("click", lookup);
+    srcSeg?.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-src]"); if (!b) return;
+      only = b.dataset.src;
+      $$("button", srcSeg).forEach((x) => x.classList.toggle("on", x === b));
+      const firstCat = cat.categories.find((c) => cat.parts.some((x) => inSource(x) && x.category === c));
+      if (!cat.parts.some((x) => inSource(x) && x.category === category) && firstCat) category = firstCat;
+      render();
+    });
     close.addEventListener("click", () => dialog.close());
     dialog.addEventListener("close", () => dialog.remove());
-    render();
+    if (sources.length) render();
     dialog.showModal();
+    q.focus();
   }
 
   // Add a custom part, or edit or remove one.
@@ -1359,7 +1418,10 @@ async function Parts(root) {
       input("other_url", "Other shop link", { type: "url", placeholder: "optional", wide: true }),
       input("notes", "Notes", { type: "text", wide: true }), dl);
     const dialog = h("dialog", { class: "pp part-dialog", "aria-label": p ? `Edit ${p.name}` : "Add a custom part" },
-      h("div", { class: "pp-head" }, h("div", {}, h("h2", {}, p ? "Edit part" : "Add a custom part"), p?.catalog_key ? h("p", {}, "From the catalog. Hole sizes for the design agent come with it.") : h("p", {}, "For hardware that is not in the catalog."))),
+      h("div", { class: "pp-head" }, h("div", {}, h("h2", {}, p ? "Edit part" : "Add a custom part"), p?.source === "mcmaster" ? h("p", {}, `From McMaster-Carr, part ${p.source_ref}. `, h("a", { href: p.links.mcmaster, target: "_blank", rel: "noopener noreferrer" }, "Product page"))
+        : p?.catalog_key ? h("p", {}, "From Bambu's Maker Supply. Hole sizes for the design agent come with it.")
+        : p?.source === "bambu" ? h("p", {}, "From a Bambu Lab Store link.")
+        : h("p", {}, "For hardware that is not in the catalog."))),
       h("div", { class: "term-body" }, form),
       h("div", { class: "pp-foot" }, del, h("span", { class: "spacer" }), h("button", { class: "btn", type: "button", onclick: () => dialog.close() }, "Cancel"), save));
     if (!p) f.quantity.value = 0;
@@ -2076,6 +2138,77 @@ async function Settings(root, [flag] = []) {
       h("div", { style: "margin-top:16px" }, field("Extra instructions", bind("agent.extra_instructions", "textarea", { rows: 3 }), "Added to every request. For example: prefer BOSL2, always add 1 mm chamfers, design for PETG.")));
   }
 
+  // ---- parts catalog sources
+  const sourcesWrap = h("div", { class: "sources" });
+  function renderSources() {
+    sourcesWrap.innerHTML = "";
+    const pt = draft.parts;
+    const mc = pt.mcmaster || {};
+    const toggle = (key, label) => {
+      const cb = h("input", { type: "checkbox", checked: !!pt.sources[key], "aria-label": `Use ${label}` });
+      cb.addEventListener("change", () => { pt.sources[key] = cb.checked; markDirty(); });
+      return h("label", { class: "switch" }, cb);
+    };
+    sourcesWrap.append(h("p", { class: "h3" }, "Parts catalogs"),
+      h("p", { class: "hint", style: "margin-top:0" }, "Where Add from catalog and the design agent find parts. Custom parts can always be added."),
+      h("div", { class: "source-card" },
+        h("div", { class: "row" }, h("div", {}, h("strong", {}, "Bambu's Maker Supply"),
+          h("p", { class: "hint", style: "margin:0" }, "Built in. Common screws, heat-set inserts, nuts, magnets and bearings with hole sizes for the design agent, bought from the Bambu Lab Store.")),
+          h("span", { class: "spacer" }), toggle("bambu", "Bambu's Maker Supply"))));
+    const mcCard = h("div", { class: "source-card" });
+    const head = h("div", { class: "row" }, h("div", {}, h("strong", {}, "McMaster-Carr"),
+      h("p", { class: "hint", style: "margin:0" }, mc.configured
+        ? `Connected as ${mc.username}. Look parts up by McMaster-Carr part number or link.`
+        : "Look parts up by McMaster-Carr part number or link. Needs access to McMaster-Carr's Product Information API: an approved customer account with its client certificate.")),
+      h("span", { class: "spacer" }), mc.configured ? toggle("mcmaster", "McMaster-Carr") : null);
+    mcCard.append(head);
+    const user = h("input", { id: "mcm-user", type: "text", autocomplete: "off", value: mc.username || "", maxlength: 120 });
+    const pass = h("input", { id: "mcm-pass", type: "password", autocomplete: "new-password", placeholder: mc.configured ? "unchanged" : "" });
+    const cert = h("input", { id: "mcm-cert", type: "file", accept: ".pfx,.p12,application/x-pkcs12" });
+    const certPass = h("input", { id: "mcm-cert-pass", type: "password", autocomplete: "new-password", placeholder: mc.configured ? "unchanged" : "" });
+    const connect = h("button", { class: "btn btn-primary btn-sm", type: "submit" }, mc.configured ? "Save and test" : "Connect");
+    const form = h("form", { class: "conn-fields", hidden: !!mc.configured },
+      field("API username", user), field("API password", pass),
+      field("Client certificate (.pfx)", cert, mc.configured ? "Leave empty to keep the saved certificate." : "The certificate file McMaster-Carr issued for the API."),
+      field("Certificate password", certPass),
+      h("div", { class: "full row" }, connect, h("span", { class: "hint", style: "margin:0" }, "Checked with McMaster-Carr before it is saved. Stored encrypted; never sent to your browser.")));
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = { username: user.value.trim() };
+      if (pass.value) body.password = pass.value;
+      if (certPass.value) body.certificate_password = certPass.value;
+      if (cert.files[0]) {
+        const bytes = new Uint8Array(await cert.files[0].arrayBuffer());
+        let bin = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        body.certificate = btoa(bin);
+      }
+      connect.disabled = true; connect.textContent = "Checking...";
+      try {
+        const parts = await api("/api/parts/sources/mcmaster", { method: "PUT", json: body });
+        Object.assign(draft.parts, { sources: { ...draft.parts.sources, mcmaster: parts.sources.mcmaster }, mcmaster: parts.mcmaster });
+        await loadSettings();
+        toast("McMaster-Carr connected");
+        renderSources();
+      } catch (err) { toast(err.message, "bad"); connect.disabled = false; connect.textContent = mc.configured ? "Save and test" : "Connect"; }
+    });
+    if (mc.configured) {
+      mcCard.append(h("div", { class: "row", style: "margin-top:8px" },
+        h("button", { class: "btn btn-sm btn-ghost", type: "button", onclick: () => { form.hidden = !form.hidden; } }, "Change login"),
+        h("button", { class: "btn btn-sm btn-ghost btn-danger", type: "button", onclick: async () => {
+          try {
+            const parts = await api("/api/parts/sources/mcmaster", { method: "DELETE" });
+            Object.assign(draft.parts, { sources: { ...draft.parts.sources, mcmaster: false }, mcmaster: parts.mcmaster });
+            await loadSettings();
+            toast("McMaster-Carr disconnected. Parts you added keep their links.");
+            renderSources();
+          } catch (err) { toast(err.message, "bad"); }
+        } }, "Disconnect")));
+    }
+    mcCard.append(form);
+    sourcesWrap.append(mcCard);
+  }
+
   // ---- access & MCP
   const accessWrap = h("div", {});
   function renderAccess() {
@@ -2258,7 +2391,8 @@ async function Settings(root, [flag] = []) {
         field("Hardware by default", bind("agent.hardware_mode", "select", { options: Object.entries(HARDWARE_MODES) }), "Ask me shows a choice when a request needs screws, inserts, magnets or other hardware. You can change it per request in Studio."),
         field("Bambu Lab Store", bind("parts.store_region", "select", { options: [["us", "United States"], ["ca", "Canada"], ["eu", "Europe"], ["uk", "United Kingdom"], ["au", "Australia"], ["asia", "Asia"]] }), "The regional store buy links search."),
         field("Amazon site", bind("parts.amazon_domain", "select", { options: AMAZON_SITES.map((d) => [d, d]) })),
-        field("Amazon associate tag", bind("parts.amazon_tag", "text", { placeholder: "optional, e.g. yourtag-20", maxlength: 40 }), "Added to Amazon links if you have an Amazon Associates account. Leave empty for plain links."))),
+        field("Amazon associate tag", bind("parts.amazon_tag", "text", { placeholder: "optional, e.g. yourtag-20", maxlength: 40 }), "Added to Amazon links if you have an Amazon Associates account. Leave empty for plain links.")),
+      sourcesWrap),
     section("about", "About", null,
       h("div", { class: "about" },
         h("div", { class: "about-text" },
@@ -2286,7 +2420,7 @@ async function Settings(root, [flag] = []) {
         h("a", { class: "btn btn-ghost", href: "/api/docs", target: "_blank" }, "REST API reference"))),
     h("div", { class: "save-bar" }, saveState, saveBtn));
 
-  await renderConnections(); renderAgent(); renderAccess(); renderPricing(); renderPrinters();
+  await renderConnections(); renderAgent(); renderAccess(); renderPricing(); renderPrinters(); renderSources();
   checkUpdate();
   if (location.hash.endsWith("#printers") || sessionStorage.getItem("bp-jump") === "printer") {
     sessionStorage.removeItem("bp-jump");
@@ -2306,7 +2440,7 @@ async function Settings(root, [flag] = []) {
       toast("Settings saved");
       Object.assign(draft, structuredClone(app.settings));
       editId = draft.printers.some((x) => x.id === editId) ? editId : draft.active_printer;
-      renderAgent(); renderAccess(); renderPrinters();
+      renderAgent(); renderAccess(); renderPrinters(); renderSources();
       checkUpdate();
     } catch (err) {
       saveBtn.disabled = false;

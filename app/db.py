@@ -111,6 +111,15 @@ CREATE TABLE IF NOT EXISTS parts (
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
+-- Products looked up from a live parts catalog source (McMaster-Carr), so they can be
+-- searched later and their lookups are not repeated. data is the part as JSON.
+CREATE TABLE IF NOT EXISTS catalog_cache (
+    source TEXT NOT NULL,
+    ref TEXT NOT NULL,
+    data TEXT NOT NULL,
+    fetched_at REAL NOT NULL,
+    PRIMARY KEY (source, ref)
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -143,6 +152,9 @@ _ADDED_COLUMNS = {
                  "param_values": "TEXT"},
     # a reference file attached to a Studio request (JSON {id, name, kind, summary, ...})
     "messages": {"reference": "TEXT"},
+    # where an inventory part came from (bambu | mcmaster | custom) and its part
+    # number or product link there
+    "parts": {"source": "TEXT NOT NULL DEFAULT 'custom'", "source_ref": "TEXT NOT NULL DEFAULT ''"},
 }
 
 # Bump when the search index layout or contents change; existing databases are
@@ -178,6 +190,9 @@ def _migrate(c: sqlite3.Connection) -> None:
         "WHEN (SELECT source FROM designs WHERE designs.id=versions.design_id)='mcp' THEN 'mcp' "
         "ELSE 'manual' END WHERE origin IS NULL"
     )
+    # Catalog parts added before there were several catalog sources came from the
+    # bundled catalog, which is Bambu's Maker Supply.
+    c.execute("UPDATE parts SET source='bambu' WHERE source='custom' AND catalog_key IS NOT NULL AND catalog_key NOT LIKE 'mcm:%'")
 
 # bm25 weights, in design_fts column order
 _FTS_WEIGHTS = "0, 10.0, 6.0, 3.0, 2.0, 1.0, 1.0, 1.0, 1.0"
@@ -751,3 +766,22 @@ def usage_summary(days: int = 30) -> dict[str, Any]:
 def all_runs_for_export() -> list[dict[str, Any]]:
     with tx() as c:
         return _rows(c.execute("SELECT * FROM runs ORDER BY started_at DESC"))
+
+
+# ---- parts catalog cache ----------------------------------------------------------
+def cache_put(source: str, ref: str, data: dict[str, Any]) -> None:
+    with tx() as c:
+        c.execute("INSERT OR REPLACE INTO catalog_cache (source, ref, data, fetched_at) VALUES (?,?,?,?)",
+                  (source, ref, json.dumps(data), time.time()))
+
+
+def cache_get(source: str, ref: str) -> tuple[dict[str, Any], float] | None:
+    """A cached product and when it was fetched, or None."""
+    with tx() as c:
+        r = c.execute("SELECT data, fetched_at FROM catalog_cache WHERE source=? AND ref=?", (source, ref)).fetchone()
+    return (json.loads(r["data"]), r["fetched_at"]) if r else None
+
+
+def cache_list(source: str) -> list[dict[str, Any]]:
+    with tx() as c:
+        return [json.loads(r["data"]) for r in c.execute("SELECT data FROM catalog_cache WHERE source=? ORDER BY fetched_at DESC", (source,))]
