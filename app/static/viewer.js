@@ -5,8 +5,9 @@ import { OrbitControls } from "/vendor/three/OrbitControls.js";
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-// A letter that always faces the camera, size in mm.
-function axisLabel(text, color, size) {
+// A letter that always faces the camera and keeps the same size on screen at any
+// zoom (size is a fraction of the viewer's height).
+function axisLabel(text, color, size = 0.032) {
   const c = document.createElement("canvas");
   c.width = c.height = 64;
   const ctx = c.getContext("2d");
@@ -17,7 +18,7 @@ function axisLabel(text, color, size) {
   ctx.fillText(text, 32, 34);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, sizeAttenuation: false }));
   sprite.scale.set(size, size, 1);
   return sprite;
 }
@@ -125,7 +126,7 @@ export class Viewer {
     const { x, y } = this.bed;
     const size = Math.min(x, y);
     const shaft = Math.min(0.5, Math.max(0.25, size * 0.0014));
-    const headLen = Math.min(9, Math.max(4, size * 0.028));
+    const headLen = Math.min(7, Math.max(3.5, size * 0.022));
     const headR = headLen * 0.32;
     const zLen = Math.min(60, Math.max(25, size * 0.18));
     const colors = {
@@ -150,8 +151,8 @@ export class Viewer {
       const head = new THREE.Mesh(new THREE.ConeGeometry(headR, headLen, 20), mat);
       head.quaternion.copy(turn);
       head.position.copy(origin).addScaledVector(dir, len - headLen / 2);
-      const label = axisLabel(name.toUpperCase(), colors[name], headLen * 1.5);
-      label.position.copy(origin).addScaledVector(dir, len + headLen * 0.9);
+      const label = axisLabel(name.toUpperCase(), colors[name]);
+      label.position.copy(origin).addScaledVector(dir, len + headLen * 0.8);
       g.add(body, head, label);
     }
     return g;
