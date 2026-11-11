@@ -38,6 +38,7 @@ export class Viewer {
     this.buildPlate();
     this.resize();
     this.home("iso");
+    this.setupHover();
     const tick = () => {
       this._raf = requestAnimationFrame(tick);
       this.controls.update();
@@ -110,6 +111,7 @@ export class Viewer {
     const c = bb.getCenter(new THREE.Vector3());
     geo.translate(-c.x, -c.y, -bb.min.z);
     geo.computeBoundingBox();
+    this.unhover();
     if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); }
     if (this.edges) { this.scene.remove(this.edges); this.edges.geometry.dispose(); this.edges = null; }
     const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(css("--part") || "#3C6E9E"), roughness: 0.55, metalness: 0.05, flatShading: false, wireframe: this.wire });
@@ -125,6 +127,7 @@ export class Viewer {
   }
 
   clear() {
+    this.unhover();
     if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh = null; }
     this._hasLoaded = false;
   }
@@ -174,8 +177,70 @@ export class Viewer {
     }
   }
 
+  // Hovering the part shows its size along X, Y and Z (the box it occupies on the
+  // plate) next to the cursor, and outlines that box. Mouse and pen only: on touch
+  // the size pill in the readout already shows it.
+  setupHover() {
+    this.raycaster = new THREE.Raycaster();
+    this.tip = document.createElement("div");
+    this.tip.className = "dims-tip tabular";
+    this.tip.hidden = true;
+    this.el.appendChild(this.tip);
+    this.hoverBox = null;
+    const cv = this.renderer.domElement;
+    let pending = null;
+    this._onMove = (e) => {
+      if (e.pointerType === "touch" || e.buttons) { this.unhover(); return; } // not while orbiting
+      if (!pending) requestAnimationFrame(() => { const ev = pending; pending = null; this.hover(ev); });
+      pending = e;
+    };
+    this._onLeave = () => this.unhover();
+    cv.addEventListener("pointermove", this._onMove);
+    cv.addEventListener("pointerleave", this._onLeave);
+    cv.addEventListener("pointerdown", this._onLeave);
+  }
+
+  hover(e) {
+    if (!this.mesh) return this.unhover();
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const box = this.mesh.geometry.boundingBox;
+    // Cheap box test first, so a big mesh is only ray-traced when the cursor is near it.
+    if (!this.raycaster.ray.intersectsBox(box) || !this.raycaster.intersectObject(this.mesh, false).length) return this.unhover();
+    const size = box.getSize(new THREE.Vector3());
+    const mm = (n) => +n.toFixed(1);
+    this.tip.textContent = `X ${mm(size.x)} · Y ${mm(size.y)} · Z ${mm(size.z)} mm`;
+    this.tip.hidden = false;
+    // Next to the cursor, flipped to stay inside the viewer.
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const w = this.tip.offsetWidth, h = this.tip.offsetHeight;
+    this.tip.style.left = `${x + 14 + w > rect.width ? x - 10 - w : x + 14}px`;
+    this.tip.style.top = `${y + 18 + h > rect.height ? y - 10 - h : y + 18}px`;
+    if (!this.hoverBox) {
+      this.hoverBox = new THREE.Box3Helper(box.clone(), new THREE.Color(css("--accent") || "#0E8C7A"));
+      this.scene.add(this.hoverBox);
+    }
+  }
+
+  unhover() {
+    if (this.tip) this.tip.hidden = true;
+    if (this.hoverBox) {
+      this.scene.remove(this.hoverBox);
+      this.hoverBox.geometry.dispose();
+      this.hoverBox.material.dispose();
+      this.hoverBox = null;
+    }
+  }
+
   dispose() {
     cancelAnimationFrame(this._raf);
+    const cv = this.renderer.domElement;
+    cv.removeEventListener("pointermove", this._onMove);
+    cv.removeEventListener("pointerleave", this._onLeave);
+    cv.removeEventListener("pointerdown", this._onLeave);
+    this.unhover();
+    this.tip.remove();
     this._ro.disconnect();
     this._mq.removeEventListener("change", this._onScheme);
     this.controls.dispose();

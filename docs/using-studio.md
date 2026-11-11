@@ -135,6 +135,7 @@ Each version records the printer it was checked against, shown in the **History*
 - Drag to orbit, right-drag or Shift+drag to pan, scroll to zoom.
 - **Iso**, **Front**, **Right** and **Top** frame the part from that side.
 - **Wireframe** shows the mesh triangles.
+- Hover the part to see its size along X, Y and Z, with the box it takes up on the plate outlined. The same size is always shown in the readout at the bottom left.
 
 The grid matches your printer profile, with fine lines every 10 mm and bold lines every 50 mm. Delta printers get a round plate. The red and green lines mark the X and Y directions at the center of the plate. Parts are shown centered on the plate and resting on its surface, the way a slicer places them, so a design does not need `center=true` to preview well. Downloads keep the design's own OpenSCAD coordinates.
 

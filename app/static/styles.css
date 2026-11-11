@@ -234,6 +234,8 @@ label { display: block; font-weight: 500; margin-bottom: 4px; }
 .stage-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: color-mix(in srgb, var(--viewer-bg) 70%, transparent); position: absolute; inset: 0 0 auto 0; z-index: 2; flex-wrap: nowrap; }
 .viewer { flex: 1; position: relative; }
 .viewer canvas { display: block; width: 100% !important; height: 100% !important; }
+/* Part size next to the cursor while hovering the part (viewer.js). */
+.dims-tip { position: absolute; z-index: 3; pointer-events: none; white-space: nowrap; padding: 3px 8px; border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); color: var(--ink); font-size: 12px; font-weight: 500; }
 .viewer-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--ink-3); pointer-events: none; padding: 24px; }
 .viewer-empty strong { display: block; color: var(--ink-2); font-size: 15px; margin-bottom: 4px; }
 .readout { position: absolute; left: 14px; bottom: 14px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 28px); }
