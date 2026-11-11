@@ -5,6 +5,31 @@ import { OrbitControls } from "/vendor/three/OrbitControls.js";
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
+// A letter that always faces the camera, size in mm.
+function axisLabel(text, color, size) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const ctx = c.getContext("2d");
+  ctx.font = "600 44px system-ui, -apple-system, 'Segoe UI', sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = color;
+  ctx.fillText(text, 32, 34);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sprite.scale.set(size, size, 1);
+  return sprite;
+}
+
+// Free a group's GPU resources: geometries, materials and their textures.
+function disposeTree(root) {
+  root.traverse((o) => {
+    o.geometry?.dispose();
+    for (const m of [].concat(o.material || [])) { m.map?.dispose(); m.dispose(); }
+  });
+}
+
 export class Viewer {
   constructor(el) {
     this.el = el;
@@ -53,7 +78,7 @@ export class Viewer {
   }
 
   buildPlate() {
-    if (this.plate) { this.scene.remove(this.plate); this.plate.traverse((o) => o.geometry && o.geometry.dispose()); }
+    if (this.plate) { this.scene.remove(this.plate); disposeTree(this.plate); }
     const g = new THREE.Group();
     const { x, y } = this.bed;
     const major = new THREE.Color(css("--grid-major") || "#B7C1CB");
@@ -86,14 +111,50 @@ export class Viewer {
       ? Array.from({ length: 129 }, (_, i) => new THREE.Vector3(r * Math.cos((i / 128) * Math.PI * 2), r * Math.sin((i / 128) * Math.PI * 2), 0))
       : [new THREE.Vector3(-x / 2, -y / 2, 0), new THREE.Vector3(x / 2, -y / 2, 0), new THREE.Vector3(x / 2, y / 2, 0), new THREE.Vector3(-x / 2, y / 2, 0), new THREE.Vector3(-x / 2, -y / 2, 0)];
     g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outline), new THREE.LineBasicMaterial({ color: major })));
-    const axis = (to, color) => {
-      const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0.02), to]);
-      g.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color })));
-    };
-    axis(new THREE.Vector3(20, 0, 0.02), 0xd0453a);
-    axis(new THREE.Vector3(0, 20, 0.02), 0x3a9d4f);
+    g.add(this.buildAxes());
     this.plate = g;
     this.scene.add(g);
+  }
+
+  // X (red), Y (green) and Z (blue) arrows from the plate origin (its centre, where
+  // parts are placed). X and Y run out to the plate edge, so they still show past a
+  // part sitting on the origin and stay readable when the camera is close to it.
+  // They are solid shapes, not 1 px lines, so they stand out from the grid.
+  buildAxes() {
+    const g = new THREE.Group();
+    const { x, y } = this.bed;
+    const size = Math.min(x, y);
+    const shaft = Math.min(0.5, Math.max(0.25, size * 0.0014));
+    const headLen = Math.min(9, Math.max(4, size * 0.028));
+    const headR = headLen * 0.32;
+    const zLen = Math.min(60, Math.max(25, size * 0.18));
+    const colors = {
+      x: css("--axis-x") || "#D0453A",
+      y: css("--axis-y") || "#2E9A4A",
+      z: css("--axis-z") || "#2F6BE0",
+    };
+    // X and Y sit on the plate (lifted by their radius) so they never z-fight the grid.
+    const origin = new THREE.Vector3(0, 0, shaft);
+    const up = new THREE.Vector3(0, 1, 0); // three.js cylinders and cones point along +Y
+    const axes = [
+      ["x", new THREE.Vector3(1, 0, 0), x / 2],
+      ["y", new THREE.Vector3(0, 1, 0), y / 2],
+      ["z", new THREE.Vector3(0, 0, 1), zLen],
+    ];
+    for (const [name, dir, len] of axes) {
+      const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colors[name]) });
+      const turn = new THREE.Quaternion().setFromUnitVectors(up, dir);
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(shaft, shaft, len - headLen, 12), mat);
+      body.quaternion.copy(turn);
+      body.position.copy(origin).addScaledVector(dir, (len - headLen) / 2);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(headR, headLen, 20), mat);
+      head.quaternion.copy(turn);
+      head.position.copy(origin).addScaledVector(dir, len - headLen / 2);
+      const label = axisLabel(name.toUpperCase(), colors[name], headLen * 1.5);
+      label.position.copy(origin).addScaledVector(dir, len + headLen * 0.9);
+      g.add(body, head, label);
+    }
+    return g;
   }
 
   recolor() {
