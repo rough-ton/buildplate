@@ -219,6 +219,8 @@ def test_design_run_through_claude_code(server):
 
     run = env.db.get_run(events[0]["run_id"])
     assert (run["status"], run["billing"], run["auth_method"], run["model"]) == ("ok", "subscription", "anthropic.claude_code", "claude-sonnet-5-5")
+    # the alias's resolved model is kept for the picker (issue #27)
+    assert env.connections.get(cid)["resolved"] == {"sonnet": "claude-sonnet-5-5"}
     assert (run["input_tokens"], run["output_tokens"], run["cache_read_tokens"], run["cache_write_tokens"]) == (11250, 385, 6500, 3500)
     assert (run["cost_usd"], run["est_cost_usd"], run["iterations"]) == (0, 0.0321, 3)
     assert [s["tool_calls"] for s in run["steps"]] == [["check_design"], ["submit_design"], []]

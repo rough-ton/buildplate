@@ -139,15 +139,30 @@ function renderModelChip() {
   const conn = connectionById(a.connection);
   if (conn && a.model) {
     chip.className = "model-chip";
-    chip.innerHTML = `<strong>${esc(a.model)}</strong>${esc(conn.label)}`;
+    chip.innerHTML = `<strong>${esc(modelLabel(conn, a.model))}</strong>${esc(conn.label)}`;
   } else {
     chip.className = "model-chip missing";
     chip.innerHTML = `<strong>No model selected</strong><a href="#/settings">Choose one in Settings</a>`;
   }
 }
 
-// Picker values are "<connection id>::<model>", grouped by connection.
-function modelSelect(attrs = {}) {
+// A model's name in pickers. Aliases such as Claude Code's "sonnet" also show the
+// model they last resolved to, e.g. "sonnet (claude-sonnet-5-5)", once a request has used them.
+function modelLabel(c, m) {
+  const r = c?.resolved?.[m];
+  return r && r !== m ? `${m} (${r})` : m;
+}
+
+// The model last picked or used for a Studio request, kept in this browser so it
+// survives leaving Studio and starting a new design. The Settings default is unchanged.
+const LAST_MODEL_KEY = "bp-last-model";
+function lastModel() { try { return localStorage.getItem(LAST_MODEL_KEY) || ""; } catch (_) { return ""; } }
+function rememberModel(value) { try { if (value) localStorage.setItem(LAST_MODEL_KEY, value); } catch (_) {} }
+
+// Picker values are "<connection id>::<model>", grouped by connection. Selects the
+// Settings default, or with preferLast the last model used in Studio when it is
+// still available (falling back to the default).
+function modelSelect(attrs = {}, { preferLast = false } = {}) {
   const a = app.settings.agent;
   const sel = h("select", attrs);
   for (const c of app.settings?.connections || []) {
@@ -156,11 +171,22 @@ function modelSelect(attrs = {}) {
     if (c.id === a.connection && a.model) models.add(a.model);
     if (!models.size) continue;
     const group = h("optgroup", { label: `${c.label} (${BILLING_LABELS[c.billing] || c.billing})` });
-    for (const m of models) group.append(h("option", { value: `${c.id}::${m}`, selected: c.id === a.connection && m === a.model }, m));
+    for (const m of models) group.append(h("option", { value: `${c.id}::${m}`, selected: c.id === a.connection && m === a.model }, modelLabel(c, m)));
     sel.append(group);
   }
   if (!sel.options.length) sel.append(h("option", { value: "" }, "No models configured"));
+  const last = preferLast ? lastModel() : "";
+  if (last && [...sel.options].some((o) => o.value === last)) sel.value = last;
   return sel;
+}
+
+// Refresh option names after settings reload (an alias may have resolved since).
+function relabelModels(sel) {
+  for (const o of sel.options) {
+    const [cid, m] = o.value.split("::");
+    const c = connectionById(cid);
+    if (c && m) o.textContent = modelLabel(c, m);
+  }
 }
 
 // ---------------------------------------------------------------- auth
@@ -239,7 +265,7 @@ async function Studio(root, [designId]) {
   const newBtn = h("button", { class: "btn btn-ghost btn-sm", title: "Start a new design", html: icons.plus + "New" });
   const chat = h("div", { class: "chat", "aria-live": "polite" });
   const prompt = h("textarea", { placeholder: "Describe a part, or ask for a change to the current one", rows: 3, "aria-label": "Design request" });
-  const picker = modelSelect({ "aria-label": "Model for this request" });
+  const picker = modelSelect({ "aria-label": "Model for this request" }, { preferLast: true });
   const sendBtn = h("button", { class: "btn btn-primary", html: icons.send + "Generate" });
   const fileInput = h("input", { type: "file", accept: REFERENCE_ACCEPT, hidden: true });
   const attachBtn = h("button", { class: "btn btn-ghost btn-sm", type: "button", html: icons.attach, title: "Attach a reference: a picture, STL, 3MF, SCAD or G-code file", "aria-label": "Attach a reference file" });
@@ -789,6 +815,7 @@ async function Studio(root, [designId]) {
     if (!isResend && s.ref?.uploading) { toast("Wait for the reference file to finish uploading."); return; }
     const [connection, model] = (picker.value || "").split("::");
     if (!connection) { toast("Add an AI connection and pick a model in Settings first.", "bad"); return; }
+    rememberModel(picker.value);
     const ref = isResend ? resendRef : s.ref;
     if (!isResend) addUser(text, ref);
     prompt.value = "";
@@ -874,12 +901,14 @@ async function Studio(root, [designId]) {
       s.abort = null;
       sendBtn.innerHTML = icons.send + "Generate";
       chat.scrollTop = chat.scrollHeight;
+      // The run may have resolved a model alias (sonnet -> its full id): show it.
+      loadSettings().then(() => relabelModels(picker)).catch(() => {});
     }
   }
 
   sendBtn.addEventListener("click", () => (s.running ? s.abort?.abort() : generate()));
   hwSel.addEventListener("change", () => hwSel.blur());
-  picker.addEventListener("change", syncPlanNote);
+  picker.addEventListener("change", () => { rememberModel(picker.value); syncPlanNote(); });
   syncPlanNote();
   prompt.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !e.shiftKey)) { e.preventDefault(); generate(); }
