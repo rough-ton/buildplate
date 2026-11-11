@@ -588,3 +588,11 @@ dialog.pp.part-dialog { width: min(640px, calc(100vw - 32px)); height: fit-conte
 .chatgpt-btn:hover { background: #222; color: #fff; filter: none; }
 .chatgpt-steps p { margin: 12px 0 8px; }
 .chatgpt-steps textarea { width: 100%; }
+
+/* Parts catalog sources (Settings > Parts and shopping, Add from catalog). */
+.sources { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+.source-card { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; background: var(--panel); }
+.source-card .row { align-items: flex-start; flex-wrap: nowrap; }
+.source-pill { margin-left: 6px; height: 18px; padding: 0 6px; font-size: 11px; vertical-align: 1px; }
+.catalog-search { flex-wrap: nowrap; gap: 6px; }
+.catalog-search input { min-width: 0; flex: 1; }

@@ -18,7 +18,7 @@ Include the Buildplate version, how you run it, and steps to reproduce.
 
 ## How secrets are stored
 
-- Connection credentials (each method declares which of its fields are secret) and the MCP token are encrypted with Fernet (AES-128 in CBC mode with HMAC-SHA256) before being written to `/data/settings.json`.
+- Connection credentials (each method declares which of its fields are secret), the McMaster-Carr API login (password, client certificate and certificate password) and the MCP token are encrypted with Fernet (AES-128 in CBC mode with HMAC-SHA256) before being written to `/data/settings.json`.
 - The encryption key is in `/data/.secret` (mode 600), or derived from `BUILDPLATE_SECRET_KEY` if you set it.
 - The web UI password is stored as a salted scrypt hash.
 - The browser never receives saved keys. It only sees whether one is set and its last four characters.
@@ -44,6 +44,8 @@ Creating, editing, testing or removing a connection (`POST`, `PATCH` and `DELETE
 
 - a signed-in web UI password session, or
 - a request from the server itself: a direct connection from `127.0.0.1` or `::1` with no `X-Forwarded-For`, `Forwarded` or `X-Real-IP` header, so a reverse proxy on the same host does not count.
+
+The same applies to saving or removing the McMaster-Carr API login (`PUT` and `DELETE /api/parts/sources/mcmaster`). Buildplate uses the certificate only to call `api.mcmaster.com`. It writes it to a private temporary file just long enough to load it, then deletes the file.
 
 The MCP bearer token is not enough. Without a password, connections can still be listed (credentials masked) and used, and environment-variable connections are still added, but they cannot be changed from the browser. Inside Docker, a browser on the host connects through the Docker network rather than loopback, so in practice you need a password.
 

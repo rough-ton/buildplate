@@ -20,6 +20,7 @@ import os
 import re
 import secrets
 import threading
+import time
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -106,8 +107,15 @@ DEFAULTS: dict[str, Any] = {
     },
     "pricing": {"overrides": {}},
     # Where buy links for parts point: Bambu Lab Store region, Amazon site and an
-    # optional Amazon associate tag added to Amazon links.
-    "parts": {"store_region": "us", "amazon_domain": "amazon.com", "amazon_tag": ""},
+    # optional Amazon associate tag added to Amazon links. sources: which parts
+    # catalogs "Add from catalog" and the design agent use (see parts.py). mcmaster
+    # holds the McMaster-Carr API login; its secrets are encrypted on disk and only
+    # change through set_mcmaster().
+    "parts": {
+        "store_region": "us", "amazon_domain": "amazon.com", "amazon_tag": "",
+        "sources": {"bambu": True, "mcmaster": False},
+        "mcmaster": {"username": "", "secrets": {}, "checked_at": 0},
+    },
     "server": {"public_url": ""},
     # Ask GitHub whether a newer release exists, shown next to the version in Settings.
     "updates": {"check": True},
@@ -375,6 +383,8 @@ class SettingsStore:
         for c in data["connections"]:
             c["secrets"] = {k: self._dec(v) for k, v in (c.get("secrets") or {}).items()}
         data["security"]["mcp_token"] = self._dec(data["security"].get("mcp_token", ""))
+        mc = data["parts"]["mcmaster"]
+        mc["secrets"] = {k: self._dec(v) for k, v in (mc.get("secrets") or {}).items()}
         data["printer"] = copy.deepcopy(active_printer(data))
         return data
 
@@ -390,6 +400,9 @@ class SettingsStore:
         token = sec.pop("mcp_token", "")
         sec["mcp_token_set"] = bool(token)
         sec["mcp_token_hint"] = ("****" + token[-4:]) if token else ""
+        mc = data["parts"]["mcmaster"]
+        data["parts"]["mcmaster"] = {"username": mc.get("username", ""), "configured": mcmaster_configured(mc),
+                                     "checked_at": mc.get("checked_at", 0)}
         return data
 
     def update(self, patch: dict[str, Any]) -> dict[str, Any]:
@@ -402,6 +415,9 @@ class SettingsStore:
             # Connections change only through connections.py, which handles encryption.
             patch.pop("connections", None)
             patch.pop("settings_version", None)
+            # The McMaster-Carr login changes only through set_mcmaster().
+            if isinstance(patch.get("parts"), dict):
+                patch["parts"].pop("mcmaster", None)
             if "providers" in patch:
                 raise ValueError("AI providers are now connections. Use /api/connections.")
             if "mcp_token" in patch.get("security", {}):
@@ -429,6 +445,20 @@ class SettingsStore:
             ids = {c["id"] for c in conns}
             if current["agent"].get("connection") not in ids:
                 current["agent"]["connection"] = ""
+            self._write(current)
+
+    def set_mcmaster(self, username: str = "", secrets_: dict[str, str] | None = None, enabled: bool | None = None) -> None:
+        """Save (or with no secrets, remove) the McMaster-Carr API login. secrets are
+        plain text and get encrypted: password, certificate (base64 PKCS#12) and
+        certificate_password."""
+        with self._lock:
+            current = copy.deepcopy(self._read())
+            pt = current["parts"]
+            pt["mcmaster"] = {"username": username.strip()[:120], "checked_at": time.time() if secrets_ else 0,
+                              "secrets": {k: self._enc(v) for k, v in (secrets_ or {}).items() if v}}
+            if enabled is not None:
+                pt["sources"]["mcmaster"] = bool(enabled)
+            _validate(current)
             self._write(current)
 
     def set_password(self, password: str) -> None:
@@ -506,6 +536,13 @@ def _validate(s: dict[str, Any]) -> None:
     if tag and not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", tag):
         raise ValueError("The Amazon associate tag can only contain letters, numbers, - and _.")
     pt["amazon_tag"] = tag
+    src = pt.get("sources") if isinstance(pt.get("sources"), dict) else {}
+    mc = pt.get("mcmaster") if isinstance(pt.get("mcmaster"), dict) else {}
+    pt["mcmaster"] = {"username": str(mc.get("username") or ""), "secrets": dict(mc.get("secrets") or {}),
+                      "checked_at": float(mc.get("checked_at") or 0)}
+    # McMaster-Carr can only be on with a saved login.
+    pt["sources"] = {"bambu": src.get("bambu") not in (False, "false", "off", 0),
+                     "mcmaster": src.get("mcmaster") in (True, "true", "on", 1) and mcmaster_configured(pt["mcmaster"])}
     r = s["render"]
     r["timeout"] = max(10, min(int(r["timeout"]), 1800))
     r["max_parallel"] = max(1, min(int(r["max_parallel"]), 16))
@@ -529,6 +566,12 @@ ENV_KEYS = {
 
 def mask(value: str) -> str:
     return ("****" + value[-4:]) if len(value) >= 8 else ("set" if value else "")
+
+
+def mcmaster_configured(mc: dict[str, Any]) -> bool:
+    """Is a McMaster-Carr API login saved? (Works on encrypted or decrypted values.)"""
+    sec = mc.get("secrets") or {}
+    return bool(mc.get("username") and sec.get("password") and sec.get("certificate"))
 
 
 def public_connection(c: dict[str, Any]) -> dict[str, Any]:

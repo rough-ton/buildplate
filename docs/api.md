@@ -81,8 +81,11 @@ Returns `id`, `name`, `kind` (`image`, `mesh`, `scad` or `gcode`), `kind_label`,
 | Method and path | Description |
 | --- | --- |
 | `GET /api/parts?q=&category=` | Your inventory, with hole sizes, a `low` flag and buy `links` |
-| `GET /api/parts/catalog` | The built-in hardware catalog |
-| `POST /api/parts` | Add a part: `{catalog_key, quantity}` from the catalog, or custom fields `{name, category, size, type, material, quantity, low_stock, bambu_url, amazon_url, other_url, notes}`. Adding a catalog part you have adds to its quantity |
+| `GET /api/parts/catalog` | `{categories, parts, sources}`: the parts in the enabled catalogs, each with its `source` (`bambu` or `mcmaster`), and which catalogs are on |
+| `POST /api/parts/lookup` | Direct entry: `{query}` is a McMaster-Carr part number or link, a Bambu Lab Store product link, a catalog key or a name. Returns `{parts, message}`. McMaster-Carr parts are fetched from its API and cached |
+| `POST /api/parts` | Add a part: `{catalog_key, quantity}` from a catalog (McMaster-Carr keys are `mcm:<part number>`, after a lookup), `{source: "bambu", source_ref: <Bambu Lab Store product link>, name, category, quantity}`, or custom fields `{name, category, size, type, material, quantity, low_stock, bambu_url, amazon_url, other_url, notes}`. Adding a catalog part you have adds to its quantity. Parts carry `source` (`bambu`, `mcmaster` or `custom`) and `source_ref` (part number or link) |
+| `PUT /api/parts/sources/mcmaster` | Save the McMaster-Carr API login after checking it with McMaster-Carr: `{username, password, certificate (base64 .pfx), certificate_password, enabled}`. Secrets left out keep their saved value. Needs a password session or a request from the server itself, like AI connections |
+| `DELETE /api/parts/sources/mcmaster` | Forget the McMaster-Carr login and turn it off |
 | `PATCH /api/parts/{id}` | Change any of those fields |
 | `POST /api/parts/{id}/adjust` | Add to or take from the quantity: `{delta}` |
 | `DELETE /api/parts/{id}` | Remove a part |
