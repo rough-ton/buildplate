@@ -89,6 +89,7 @@ def test_check_resolves_aliases(env):
     """Issue #44: checking a Claude plan connection looks up the model behind each
     alias, so pickers show it before any request, and a later check refreshes it."""
     c = env.connections.create("anthropic.claude_code", "Plan", {})
+    env.claude_code.child_env(c["id"])  # creates the connection's Claude Code folder
     (env.claude_code.config_dir(c["id"]) / "fake-signed-in").write_text("1")
     asyncio.run(env.connections.test(c["id"]))
     want = {"sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5", "haiku": "claude-haiku-5-5", "fable": "claude-fable-5-1"}
