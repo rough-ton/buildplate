@@ -56,7 +56,7 @@ The **Claude plan (Claude Code)** connection uses your Claude Pro, Max, Team or 
 3. A terminal opens running Claude Code's sign-in. Open the link it shows, sign in to your Claude account and approve access, then copy the code the page shows and paste it into the terminal (or the box under it) and press Enter.
 4. When it says the sign-in worked, close the terminal. The card shows **Connected** and the plan type.
 
-Pick `sonnet`, `opus`, `haiku` or `fable` from the model picker. Claude Code resolves each to the newest model of that tier; Usage records the exact model. After a request has used an alias, pickers show the model it resolved to next to it, for example `sonnet (claude-sonnet-5-5)`, so you can tell which release you are on. You can also type a full model ID.
+Pick `sonnet`, `opus`, `haiku` or `fable` from the model picker. Claude Code resolves each to the newest model of that tier; Usage records the exact model. Pickers show the model each alias runs as next to it, for example `sonnet (claude-sonnet-5-5)`, so you can tell which release you are on. Buildplate looks this up whenever the connection is checked (at no token cost) and after each request, so it follows Claude Code as aliases move to newer releases. You can also type a full model ID.
 
 How it works and what it can do:
 

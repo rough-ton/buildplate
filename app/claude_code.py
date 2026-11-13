@@ -278,6 +278,53 @@ async def forget(connection_id: str) -> None:
     shutil.rmtree(config_dir(connection_id), ignore_errors=True)
 
 
+async def _alias_model(connection_id: str, alias: str, timeout: float = 30) -> str:
+    """The full model id Claude Code runs for an alias such as "sonnet". Claude Code
+    names it in the init event it sends before doing anything, so this runs the local
+    /usage command (no model tokens) and stops Claude Code as soon as that event arrives."""
+    b = binary()
+    if b is None:
+        return ""
+    proc = await asyncio.create_subprocess_exec(
+        str(b), "-p", "/usage", "--model", alias, "--output-format", "stream-json", "--verbose",
+        "--tools", "", "--restricted", "--strict-mcp-config", "--no-session-persistence", "--permission-mode", "dontAsk",
+        stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        env=child_env(connection_id), cwd=str(config_dir(connection_id)),
+    )
+
+    async def read() -> str:
+        assert proc.stdout is not None
+        async for line in proc.stdout:
+            try:
+                ev = json.loads(line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+            if isinstance(ev, dict) and ev.get("type") == "system" and ev.get("subtype") == "init":
+                return str(ev.get("model") or "").strip()
+        return ""
+
+    try:
+        return await asyncio.wait_for(read(), timeout)
+    except asyncio.TimeoutError:
+        return ""
+    finally:
+        if proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+        await proc.wait()
+
+
+async def resolve_aliases(connection_id: str, aliases: list[str]) -> dict[str, str]:
+    """{alias: full model id} for the aliases Claude Code knows, e.g. {"sonnet":
+    "claude-sonnet-5-5"}. Full ids and aliases it could not resolve are left out."""
+    if binary() is None:
+        return {}
+    found = await asyncio.gather(*(_alias_model(connection_id, a) for a in aliases), return_exceptions=True)
+    return {a: m for a, m in zip(aliases, found) if isinstance(m, str) and m and m != a}
+
+
 _PLAN_USAGE: dict[str, tuple[float, dict[str, Any]]] = {}
 PLAN_USAGE_TTL = 60
 
