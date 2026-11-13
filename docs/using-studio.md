@@ -2,6 +2,8 @@
 
 Studio has three parts: the conversation on the left, the build plate in the middle, and the inspector on the right.
 
+Studio keeps what you have open while you visit other pages: the design and the version on the plate, your parameter values, an unsent request and its reference file, unsaved code and the camera. Select **Studio** to go back to it. It is replaced only when you open another design from the Library or select **New** (or **New design** in the Library).
+
 ## Writing a good request
 
 The agent works best with the same information you would give a person designing the part:
@@ -105,7 +107,7 @@ Tags sit under the design title. Type a tag and press Enter (or a comma) to add 
 
 The Library search box matches words anywhere in a design: its title, version descriptions, tags, the prompts that produced it, the AI provider and model, and the printer. Words match from their start, so `brack` finds "bracket". Put a phrase in double quotes to match it exactly. With search text, the best matches come first.
 
-Each card shows the provider and model behind the current version. Hover it for the request's tokens and cost; a **+N** badge means earlier versions used other models. Cards also show when the design was last changed, up to three tags (hover **+N** for the rest), its size and any hardware. The **⋮** menu on a card downloads the current version as STL, 3MF or SCAD, or deletes the design.
+Each card shows the provider and model behind the current version. Hover it for the request's tokens and cost; a **+N** badge means earlier versions used other models. Cards also show when the design was last changed, up to three tags (hover **+N** for the rest) and any hardware. The **⋮** menu on a card downloads the current version as STL, 3MF or SCAD, or deletes the design.
 
 The filters under the search box narrow results by source, model, tag and size, and the sort menu changes the order. Active filters appear as chips you can remove. Select a tag on a card to filter by it.
 

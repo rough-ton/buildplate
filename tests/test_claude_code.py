@@ -85,6 +85,22 @@ def test_method_and_status(env):
         env.claude_code.config_dir("../etc")
 
 
+def test_check_resolves_aliases(env):
+    """Issue #44: checking a Claude plan connection looks up the model behind each
+    alias, so pickers show it before any request, and a later check refreshes it."""
+    c = env.connections.create("anthropic.claude_code", "Plan", {})
+    env.claude_code.child_env(c["id"])  # creates the connection's Claude Code folder
+    (env.claude_code.config_dir(c["id"]) / "fake-signed-in").write_text("1")
+    asyncio.run(env.connections.test(c["id"]))
+    want = {"sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5", "haiku": "claude-haiku-5-5", "fable": "claude-fable-5-1"}
+    assert env.connections.get(c["id"])["resolved"] == want
+    assert next(x for x in env.connections.public_list() if x["id"] == c["id"])["resolved"] == want
+    # the alias moves to a newer release: the next check picks it up
+    (env.claude_code.config_dir(c["id"]) / "aliases.json").write_text('{"sonnet": "claude-sonnet-5-6"}')
+    asyncio.run(env.connections.test(c["id"]))
+    assert env.connections.get(c["id"])["resolved"]["sonnet"] == "claude-sonnet-5-6"
+
+
 def test_child_env_is_scrubbed(env):
     e = env.claude_code.child_env("c_abc")
     assert "ANTHROPIC_API_KEY" not in e and "CLAUDE_CODE_USE_BEDROCK" not in e

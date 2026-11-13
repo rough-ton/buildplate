@@ -45,7 +45,16 @@ if args[:2] == ["auth", "logout"]:
     print("Successfully logged out")
     sys.exit(0)
 
+# What each alias runs as. A test can move an alias to a newer release by writing
+# {"sonnet": "..."} to aliases.json in the connection's folder.
+ALIASES = {"sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5", "haiku": "claude-haiku-5-5", "fable": "claude-fable-5-1"}
+if (cfg / "aliases.json").exists():
+    ALIASES.update(json.loads((cfg / "aliases.json").read_text()))
+
 if args[:2] == ["-p", "/usage"]:
+    model = args[args.index("--model") + 1] if "--model" in args else "sonnet"
+    # Claude Code names the model it would run before doing anything else
+    out({"type": "system", "subtype": "init", "model": ALIASES.get(model, model), "tools": []})
     if not marker.exists():
         out({"type": "result", "subtype": "success", "is_error": True, "result": "Not logged in · Please run /login"})
         sys.exit(1)

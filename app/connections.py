@@ -168,6 +168,20 @@ def note_resolved(cid: str, alias: str, model: str) -> None:
             return
 
 
+def set_resolved(cid: str, found: dict[str, str]) -> None:
+    """Record what the connection's aliases resolve to right now (from a connection
+    check), replacing what earlier checks or requests recorded for them."""
+    found = {str(a).strip()[:120]: str(m).strip()[:120] for a, m in (found or {}).items() if a and m and a != m}
+    if not found:
+        return
+    conns = all_()
+    for c in conns:
+        if c["id"] == cid:
+            c["resolved"] = {**(c.get("resolved") or {}), **found}
+            store.set_connections(conns)
+            return
+
+
 async def test(cid: str) -> list[str]:
     """Check a connection by listing its models (for Claude Code, by asking the CLI
     whether it is signed in). Saves the models and the status."""
@@ -185,6 +199,12 @@ async def test(cid: str) -> list[str]:
         mark(cid, st["state"], st["detail"], models)
         if st["state"] != "connected":
             raise MethodError(st["detail"])
+        # Show each alias's current model in the pickers before any request uses it,
+        # and refresh it on every check, since an alias moves to newer releases.
+        try:
+            set_resolved(cid, await claude_code.resolve_aliases(cid, models))
+        except (claude_code.ClaudeCodeError, OSError):
+            pass
         if not store.get()["agent"]["connection"]:
             store.update({"agent": {"connection": cid, "model": models[0]}})
         return models
