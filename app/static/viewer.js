@@ -195,7 +195,7 @@ export class Viewer {
     const first = !this._hasLoaded;
     this._hasLoaded = true;
     if (first) {
-      if (this.el.clientWidth > 0) this.home(this._view || "iso");
+      if (this.el.clientWidth > 0) this.frame();
       else this._needsHome = true;
     }
     return geo.boundingBox;
@@ -248,8 +248,38 @@ export class Viewer {
     this.camera.updateProjectionMatrix();
     if (this._needsHome && this.el.clientWidth > 0) {
       this._needsHome = false;
-      this.home(this._view || "iso");
+      this.frame();
     }
+  }
+
+  // First view of a loaded part: the camera kept by setState if there is one,
+  // otherwise the current preset view.
+  frame() {
+    const cam = this._restoreCam;
+    this._restoreCam = null;
+    if (!cam) return this.home(this._view || "iso");
+    this.camera.position.fromArray(cam.position);
+    this.controls.target.fromArray(cam.target);
+    const dist = Math.max(this.camera.position.distanceTo(this.controls.target), 1);
+    this.camera.near = dist / 100;
+    this.camera.far = dist * 100;
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+  }
+
+  // Camera, preset view and wireframe, so Studio can put the view back as it was
+  // after you leave and come back.
+  getState() {
+    return { view: this._view || "iso", wire: this.wire, camera: this._hasLoaded ? { position: this.camera.position.toArray(), target: this.controls.target.toArray() } : null };
+  }
+
+  // Applied to the next part that loads.
+  setState(st) {
+    if (!st) return;
+    this._view = st.view || this._view;
+    if (st.wire !== this.wire) this.toggleWire();
+    const ok = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
+    this._restoreCam = st.camera && ok(st.camera.position) && ok(st.camera.target) ? st.camera : null;
   }
 
   // Hovering the part shows its size along X, Y and Z (the box it occupies on the

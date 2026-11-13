@@ -147,7 +147,6 @@ const app = { settings: null, cleanup: null };
 
 async function loadSettings() {
   app.settings = await api("/api/settings");
-  renderModelChip();
   return app.settings;
 }
 
@@ -183,21 +182,9 @@ function madeBy(v) {
 const BILLING_LABELS = { api: "Pay per use", subscription: "Uses your plan", cloud: "Cloud account", local: "Local" };
 function connectionById(id) { return (app.settings?.connections || []).find((c) => c.id === id); }
 
-function renderModelChip() {
-  const chip = $("#model-chip");
-  const a = app.settings?.agent || {};
-  const conn = connectionById(a.connection);
-  if (conn && a.model) {
-    chip.className = "model-chip";
-    chip.innerHTML = `<strong>${esc(modelLabel(conn, a.model))}</strong>${esc(conn.label)}`;
-  } else {
-    chip.className = "model-chip missing";
-    chip.innerHTML = `<strong>No model selected</strong><a href="#/settings">Choose one in Settings</a>`;
-  }
-}
-
 // A model's name in pickers. Aliases such as Claude Code's "sonnet" also show the
-// model they last resolved to, e.g. "sonnet (claude-sonnet-5-5)", once a request has used them.
+// model they resolve to, e.g. "sonnet (claude-sonnet-5-5)". Checking the connection
+// looks them up, and each request records what the alias ran as.
 function modelLabel(c, m) {
   const r = c?.resolved?.[m];
   return r && r !== m ? `${m} (${r})` : m;
@@ -284,7 +271,21 @@ async function route() {
 }
 
 // ================================================================= STUDIO
+// What Studio had open, kept for this browser tab so going to another page and
+// back to Studio shows the same thing: the design and version on the plate, the
+// unsent prompt and reference file, unsaved code and the camera. Opening a design
+// from the Library or starting a new design replaces it.
+const STUDIO_KEY = "bp-studio";
+function studioStash() { try { return JSON.parse(sessionStorage.getItem(STUDIO_KEY) || "null"); } catch (_) { return null; } }
+function setStudioStash(v) { try { if (v) sessionStorage.setItem(STUDIO_KEY, JSON.stringify(v)); else sessionStorage.removeItem(STUDIO_KEY); } catch (_) {} }
+
 async function Studio(root, [designId]) {
+  // "#/studio/new" starts a new design; "#/studio" goes back to what was open.
+  if (designId === "new") { setStudioStash(null); designId = null; history.replaceState(null, "", "#/studio"); }
+  const stash = studioStash();
+  const keep = stash && (!designId || stash.designId === designId) ? stash : null;
+  const restored = !designId && !!keep?.designId;
+  if (restored) { designId = keep.designId; history.replaceState(null, "", `#/studio/${designId}`); }
   const s = {
     designId: designId || null,
     title: "Untitled",
@@ -335,6 +336,8 @@ async function Studio(root, [designId]) {
     planNote.hidden = !plan;
     if (plan) { planName.textContent = plan[0]; planLink.href = plan[1]; }
   };
+  // Shown when there is no model to pick (the picker then reads "No models configured").
+  const noModelNote = h("span", { class: "hint", style: "margin:0", hidden: !!picker.value }, h("a", { href: "#/settings" }, "Add an AI connection in Settings"));
   const tags = tagEditor(async (next) => (await api(`/api/designs/${s.designId}/tags`, { method: "PUT", json: { tags: next } })).tags);
   tags.el.hidden = true;
   const left = h("section", { class: "pane pane-left on-mobile", "data-m": "chat" },
@@ -343,7 +346,7 @@ async function Studio(root, [designId]) {
     chat,
     h("div", { class: "composer" }, refSlot, prompt, fileInput,
       h("div", { class: "composer-foot" }, picker, attachBtn, h("span", { class: "spacer" }), sendBtn),
-      h("div", { class: "row composer-meta" }, hwSel, planNote, h("span", { class: "spacer" }), sessionMeter)));
+      h("div", { class: "row composer-meta" }, hwSel, planNote, noModelNote, h("span", { class: "spacer" }), sessionMeter)));
 
   // ---- center: stage
   const viewEl = h("div", { class: "viewer" });
@@ -664,7 +667,7 @@ async function Studio(root, [designId]) {
     tabBody.append(wrap);
   }
 
-  async function openVersion(v) {
+  async function openVersion(v, render = true) {
     const ver = await api(`/api/designs/${s.designId}/versions/${v}`);
     s.version = v;
     loadBom();
@@ -672,7 +675,7 @@ async function Studio(root, [designId]) {
     s.params = ver.params;
     s.overrides = { ...(ver.param_values || {}) };
     renderTab();
-    renderModel();
+    if (render) renderModel();
   }
 
   // The code the AI should change: unsaved edits, plus any tuned parameter values
@@ -872,6 +875,7 @@ async function Studio(root, [designId]) {
     if (!connection) { toast("Add an AI connection and pick a model in Settings first.", "bad"); return; }
     rememberModel(picker.value);
     const ref = isResend ? resendRef : s.ref;
+    s.inFlight = { text, ref: ref && !ref.uploading ? ref : null };
     if (!isResend) addUser(text, ref);
     prompt.value = "";
     s.ref = null;
@@ -954,6 +958,7 @@ async function Studio(root, [designId]) {
       }
       s.running = false;
       s.abort = null;
+      s.inFlight = null;
       sendBtn.innerHTML = icons.send + "Generate";
       chat.scrollTop = chat.scrollHeight;
       // The run may have resolved a model alias (sonnet -> its full id): show it.
@@ -972,7 +977,7 @@ async function Studio(root, [designId]) {
     s.title = titleInput.value.trim() || "Untitled";
     if (s.designId) await api(`/api/designs/${s.designId}`, { method: "PATCH", json: { title: s.title } });
   });
-  newBtn.addEventListener("click", () => { location.hash = "#/studio"; route(); });
+  newBtn.addEventListener("click", () => { location.hash = "#/studio/new"; });
 
   async function reloadDesign(full = true) {
     if (!s.designId) return;
@@ -1007,16 +1012,70 @@ async function Studio(root, [designId]) {
     showReadout(); // a saved edit becomes a version: show who made it
   }
 
+  // ---- keep what is open for when you come back (see STUDIO_KEY)
+  function persist() {
+    const typed = prompt.value.trim() ? prompt.value : "";
+    // Leaving mid-request stops it: keep its text and file as the draft to send again.
+    const draft = typed || (s.running && s.inFlight ? s.inFlight.text : "");
+    const ref = (s.ref && !s.ref.uploading ? s.ref : null) || (!typed && s.running ? s.inFlight?.ref : null) || null;
+    const dirty = s.code !== s.savedCode;
+    const st = {
+      designId: s.designId,
+      version: s.designId ? s.version : 0,
+      title: s.designId ? null : titleInput.value,
+      prompt: draft,
+      ref,
+      // Saved designs keep their tuned values on the server; unsaved code keeps them here.
+      code: dirty ? s.code : null,
+      params: dirty ? s.params : null,
+      overrides: dirty ? s.overrides : null,
+      tab: s.tab,
+      view: viewer.getState(),
+    };
+    setStudioStash(s.designId || draft || ref || dirty ? st : null);
+  }
+  window.addEventListener("pagehide", persist);
+
+  // Unsaved code, with its parameters and values, as it was when you left.
+  function restoreUnsaved(k) {
+    setCode(k.code);
+    s.params = Array.isArray(k.params) ? k.params : [];
+    s.overrides = k.overrides && typeof k.overrides === "object" ? k.overrides : {};
+    renderTab();
+  }
+
   // ---- boot
+  if (keep) {
+    if (TABS.some(([id]) => id === keep.tab)) s.tab = keep.tab;
+    viewer.setState(keep.view);
+    wireBtn.classList.toggle("on", viewer.wire);
+    $$("button", viewSeg).forEach((x) => x.classList.toggle("on", x.dataset.view === (keep.view?.view || "iso")));
+    if (keep.prompt) prompt.value = keep.prompt;
+    if (keep.ref) { s.ref = keep.ref; showRef(); }
+    if (!designId && keep.title) { s.title = keep.title; titleInput.value = keep.title; }
+  }
   renderTab();
   if (s.designId) {
-    try { await reloadDesign(true); await renderModel(); }
-    catch (err) { toast(err.message, "bad"); intro(); }
-  } else intro();
+    try {
+      await reloadDesign(true);
+      // the version you had on the plate, with its saved parameter values
+      if (keep?.version && keep.version !== s.version && s.versions.some((v) => v.version === keep.version)) await openVersion(keep.version, false);
+      if (keep?.code != null) restoreUnsaved(keep);
+      await renderModel();
+    } catch (err) {
+      toast(err.message, "bad");
+      // The design you had open is gone (deleted from the Library, say): start fresh.
+      if (restored && !s.versions.length) { s.designId = null; history.replaceState(null, "", "#/studio"); }
+      intro();
+    }
+  } else {
+    intro();
+    if (keep?.code != null) { restoreUnsaved(keep); renderModel(); }
+  }
   updateSessionMeter();
   setTimeout(() => prompt.focus(), 0);
 
-  return () => { saveValuesNow(); s.abort?.abort(); viewer.dispose(); };
+  return () => { persist(); window.removeEventListener("pagehide", persist); saveValuesNow(); s.abort?.abort(); viewer.dispose(); };
 }
 
 // Write parameter values into OpenSCAD code as the new defaults (`name = value;` lines).
@@ -1485,7 +1544,7 @@ async function Library(root) {
   page.append(
     h("div", { class: "page-head" },
       h("div", {}, h("h1", {}, "Library"), h("p", {}, "Every design you generate or save, with its full version history.")),
-      h("a", { class: "btn btn-primary", href: "#/studio", html: icons.plus + "New design" })),
+      h("a", { class: "btn btn-primary", href: "#/studio/new", html: icons.plus + "New design" })),
     h("div", { class: "lib-toolbar" },
       search,
       h("div", { class: "lib-filters" },
@@ -1592,7 +1651,6 @@ async function Library(root) {
       return;
     }
     for (const d of designs) {
-      const st = d.stats || {};
       const by = madeBy(d);
       const others = (d.models || []).filter((m) => !(m.provider === d.provider && m.model === d.model));
       const download = (fmt) => { location.href = `/api/designs/${d.id}/download?format=${fmt}&version=${d.current_version}`; };
@@ -1614,7 +1672,6 @@ async function Library(root) {
             if (!f.tags.includes(t)) { f.tags.push(t); sync(); }
           } }, t)), moreTags.length ? h("span", { class: "pill", title: `Also tagged: ${moreTags.join(", ")}` }, `+${moreTags.length}`) : null),
           h("div", { class: "row lib-foot" },
-            st.size_mm ? h("span", { class: "pill tabular" }, `${st.size_mm.map((n) => Math.round(n)).join(" x ")} mm`) : null,
             d.hardware ? h("span", { class: `pill ${d.hardware.to_buy ? "warn" : ""}`, title: `${d.hardware.parts} hardware parts${d.hardware.to_buy ? `; ${d.hardware.to_buy} kind${d.hardware.to_buy === 1 ? "" : "s"} to buy` : ", all on hand"}` },
               `${d.hardware.parts} part${d.hardware.parts === 1 ? "" : "s"}${d.hardware.to_buy ? `, ${d.hardware.to_buy} to buy` : ""}`) : null,
             h("span", { class: "spacer" }),

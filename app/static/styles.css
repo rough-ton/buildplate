@@ -129,9 +129,6 @@ code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
 .nav.active { background: var(--accent-soft); color: var(--ink); }
 .nav.active svg { stroke: var(--accent); }
 .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
-.model-chip { font-size: 12px; color: var(--ink-3); padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); line-height: 1.35; }
-.model-chip strong { display: block; color: var(--ink); font-weight: 500; overflow-wrap: anywhere; }
-.model-chip.missing { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
 .view { overflow: auto; min-width: 0; }
 .view:focus { outline: none; }
 
@@ -222,8 +219,10 @@ label { display: block; font-weight: 500; margin-bottom: 4px; }
 
 .composer { border-top: 1px solid var(--line); padding: 12px 14px 14px; }
 .composer textarea { min-height: 76px; max-height: 220px; border-radius: var(--radius); }
-.composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.composer-foot select { height: 30px; font-size: 12.5px; width: auto; max-width: 190px; }
+.composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-width: 0; }
+/* The model picker gives up width first, so Generate is never cut off in a narrow pane. */
+.composer-foot select { height: 30px; font-size: 12.5px; width: auto; max-width: 190px; min-width: 0; flex: 0 1 auto; text-overflow: ellipsis; }
+.composer-foot > .btn { flex-shrink: 0; white-space: nowrap; }
 .composer.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
 .ref-slot { margin-bottom: 8px; }
 .ref-card { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); background: var(--panel); border-radius: var(--radius-sm); padding: 6px 8px; max-width: 100%; white-space: normal; }
