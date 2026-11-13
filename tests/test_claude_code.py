@@ -94,7 +94,7 @@ def test_check_resolves_aliases(env):
     asyncio.run(env.connections.test(c["id"]))
     want = {"sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5", "haiku": "claude-haiku-5-5", "fable": "claude-fable-5-1"}
     assert env.connections.get(c["id"])["resolved"] == want
-    assert env.connections.public_list()[0]["resolved"] == want
+    assert next(x for x in env.connections.public_list() if x["id"] == c["id"])["resolved"] == want
     # the alias moves to a newer release: the next check picks it up
     (env.claude_code.config_dir(c["id"]) / "aliases.json").write_text('{"sonnet": "claude-sonnet-5-6"}')
     asyncio.run(env.connections.test(c["id"]))
